@@ -217,6 +217,10 @@ folders, in natural filename order. Single-file folders are skipped and
 existing playlists are kept. Pass --no-playlist (or set TORLINK_NO_PLAYLIST=1)
 to disable creation; existing playlists remain on disk.
 
+speed limits (all modes): set TORLINK_DOWNLOAD_LIMIT and/or TORLINK_UPLOAD_LIMIT
+to cap the whole client, in bytes per second with an optional k/m/g suffix
+(e.g. 2m, 500k, 1.5MB/s). Unset, 0 or off means unlimited.
+
 search (no TUI): one JSON document on stdout, with a per-source report under
 "sources". --timeout <dur> caps the whole search (default 45s; e.g. 20s, 2m).
 A source that has not answered by then is reported with code "timeout" and

@@ -1,4 +1,5 @@
 import WebTorrent, { type Torrent } from "webtorrent";
+import { parseRate } from "../util/rate";
 
 export interface TorrentProgress {
   progress: number;
@@ -35,6 +36,21 @@ export function message(e: unknown): string {
   return e instanceof Error ? e.message : String(e);
 }
 
+// TORLINK_DOWNLOAD_LIMIT and TORLINK_UPLOAD_LIMIT cap the whole client's speed
+// (see parseRate for the format). Unset, empty, 0 and unparseable values all
+// leave that direction unlimited, so a typo never throttles a download to a halt.
+export function rateLimitOpts(env: NodeJS.ProcessEnv = process.env): {
+  downloadLimit?: number;
+  uploadLimit?: number;
+} {
+  const down = parseRate(env.TORLINK_DOWNLOAD_LIMIT ?? "");
+  const up = parseRate(env.TORLINK_UPLOAD_LIMIT ?? "");
+  return {
+    ...(down ? { downloadLimit: down } : {}),
+    ...(up ? { uploadLimit: up } : {}),
+  };
+}
+
 export class TorrentEngine {
   private client: WebTorrent | null = null;
   private torrents = new Map<string, Torrent>();
@@ -62,6 +78,7 @@ export class TorrentEngine {
       // kills the process. The opt-out is a workaround until that dial path is
       // fixed upstream.
       const opts = {
+        ...rateLimitOpts(),
         ...(process.env.TORLINK_NO_UTP ? { utp: false } : {}),
         ...(process.platform === "darwin" ? { natPmp: false } : {}),
       };

@@ -65,6 +65,8 @@ torlink also runs without the TUI, for servers and seedboxes:
 
 Add `--daemon` to keep seed, watch, serve, or files running after you log out; `torlnk --help` has the full list of modes and flags.
 
+To cap bandwidth, set `TORLINK_DOWNLOAD_LIMIT` and/or `TORLINK_UPLOAD_LIMIT` (bytes per second, with an optional `k`/`m`/`g` suffix), for example `TORLINK_UPLOAD_LIMIT=500k torlnk`.
+
 ### Sharing something of your own
 
 Everything else starts with a torrent someone else made. `seed` goes the other way:

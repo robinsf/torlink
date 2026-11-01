@@ -189,3 +189,32 @@ describe("TorrentEngine ready handler", () => {
     engine.destroy();
   });
 });
+
+describe("TorrentEngine speed limits", () => {
+  const MAGNET = "magnet:?xt=urn:btih:0000000000000000000000000000000000000000";
+
+  it("passes TORLINK_DOWNLOAD_LIMIT and TORLINK_UPLOAD_LIMIT to webtorrent as bytes per second", async () => {
+    vi.stubEnv("TORLINK_DOWNLOAD_LIMIT", "2m");
+    vi.stubEnv("TORLINK_UPLOAD_LIMIT", "500k");
+    try {
+      const { TorrentEngine } = await import("./engine");
+      const engine = new TorrentEngine();
+      engine.add("test-id", MAGNET, "/downloads", {});
+      engine.destroy();
+    } finally {
+      vi.unstubAllEnvs();
+    }
+    expect(constructorCalls[0]).toMatchObject({ downloadLimit: 2 * 1024 ** 2, uploadLimit: 512_000 });
+  });
+
+  it("leaves both directions unlimited when the variables are unset, 0 or unparseable", async () => {
+    const { rateLimitOpts } = await import("./engine");
+    expect(rateLimitOpts({})).toEqual({});
+    expect(rateLimitOpts({ TORLINK_DOWNLOAD_LIMIT: "0", TORLINK_UPLOAD_LIMIT: "fast" })).toEqual({});
+  });
+
+  it("limits one direction without touching the other", async () => {
+    const { rateLimitOpts } = await import("./engine");
+    expect(rateLimitOpts({ TORLINK_UPLOAD_LIMIT: "100k" })).toEqual({ uploadLimit: 102_400 });
+  });
+});
