@@ -1,6 +1,7 @@
 import { bittorrented } from "./bittorrented";
 import { eztv } from "./eztv";
 import { fitgirl } from "./fitgirl";
+import { knaben } from "./knaben";
 import { nyaa } from "./nyaa";
 import { subsplease } from "./subsplease";
 import { tpbMovies, tpbTv } from "./piratebay";
@@ -19,6 +20,7 @@ export const SOURCES: readonly Source[] = [
   nyaa,
   subsplease,
   bittorrented,
+  knaben,
 ];
 
 export const DEFAULT_SOURCE: Source = SOURCES[0]!;
