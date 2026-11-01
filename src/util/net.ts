@@ -1,4 +1,4 @@
-export const USER_AGENT = "torlink (+https://www.npmjs.com/package/torlnk)";
+export const USER_AGENT = "torlink (+https://www.npmjs.com/package/@robinsf/torlink)";
 
 export type FetchImpl = (url: string, init?: RequestInit) => Promise<Response>;
 export type SleepImpl = (ms: number, signal?: AbortSignal) => Promise<void>;

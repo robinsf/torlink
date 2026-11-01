@@ -11,7 +11,7 @@ describe("managedInstallOwner", () => {
     const denied = (): void => {
       throw new Error("EACCES");
     };
-    expect(managedInstallOwner("/usr/lib/node_modules/torlnk", denied)).toBe("your package manager");
+    expect(managedInstallOwner("/usr/lib/node_modules/@robinsf/torlink", denied)).toBe("your package manager");
   });
 
   it("returns null for a writable root we own", () => {
