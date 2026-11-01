@@ -146,3 +146,14 @@ export function truncate(s: string, max: number): string {
   if (max <= 1) return s.slice(0, Math.max(0, max));
   return s.length <= max ? s : s.slice(0, max - 1) + "…";
 }
+
+// Cut `s` to at most `max` characters on a word boundary, ending in an
+// ellipsis when anything was dropped. A single word longer than `max` is cut
+// hard, so the result never overshoots.
+export function clipWords(s: string, max: number): string {
+  if (max <= 1) return s.slice(0, Math.max(0, max));
+  if (s.length <= max) return s;
+  const head = s.slice(0, max - 1);
+  const space = head.lastIndexOf(" ");
+  return `${(space > max / 2 ? head.slice(0, space) : head).trimEnd()}…`;
+}

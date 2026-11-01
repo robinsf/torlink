@@ -217,6 +217,11 @@ folders, in natural filename order. Single-file folders are skipped and
 existing playlists are kept. Pass --no-playlist (or set TORLINK_NO_PLAYLIST=1)
 to disable creation; existing playlists remain on disk.
 
+descriptions (TUI): opening a movie or show's details looks up a short
+description of it, and of the episode when the release names one, on TVmaze
+(shows) or Wikipedia (films), sending just the cleaned-up title. Set
+TORLINK_NO_DESCRIPTIONS=1 to send nothing.
+
 speed limits (all modes): set TORLINK_DOWNLOAD_LIMIT and/or TORLINK_UPLOAD_LIMIT
 to cap the whole client, in bytes per second with an optional k/m/g suffix
 (e.g. 2m, 500k, 1.5MB/s). Unset, 0 or off means unlimited.

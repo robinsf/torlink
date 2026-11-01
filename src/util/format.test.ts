@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
 import {
+  clipWords,
   formatBytes,
   parseSize,
   parseUnixSeconds,
@@ -146,5 +147,22 @@ describe("parseUnixSeconds", () => {
     for (const a of added) expect(a === undefined || Number.isFinite(a)).toBe(true);
     const cmp = (a?: number, b?: number): number => (b ?? 0) - (a ?? 0);
     for (const a of added) for (const b of added) expect(Number.isNaN(cmp(a, b))).toBe(false);
+  });
+});
+
+describe("clipWords", () => {
+  it("returns short text untouched", () => {
+    expect(clipWords("short text", 40)).toBe("short text");
+  });
+  it("cuts on a word boundary and ends in an ellipsis", () => {
+    expect(clipWords("one two three four", 12)).toBe("one two…");
+  });
+  it("hard-cuts a single long word", () => {
+    expect(clipWords("abcdefghijklmnop", 6)).toBe("abcde…");
+  });
+  it("never overshoots the limit", () => {
+    for (const max of [2, 5, 9, 20]) {
+      expect(clipWords("alpha beta gamma delta epsilon zeta", max).length).toBeLessThanOrEqual(max);
+    }
   });
 });

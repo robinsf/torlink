@@ -7,12 +7,13 @@ import { TextField } from "./TextField";
 import { Panel } from "./Panel";
 import { Rule } from "./Rule";
 import { useConcurrentSearch } from "../hooks/useConcurrentSearch";
+import { useDescription } from "../hooks/useDescription";
 import { getSource, SOURCES } from "../../sources/registry";
 import { stickCursor, wrapStep, windowStart, resultsPanelOuter } from "../move";
 import { sortResults, nextSort, sortLabel, sortArrow, type Sort, type SortField } from "../sort";
 import { filterResults } from "../filter";
 import { COLOR, GUTTER, ICON, sourceStyle } from "../theme";
-import { cleanText, formatBytes, formatCount, formatRelative, stripControl, truncate } from "../../util/format";
+import { cleanText, clipWords, formatBytes, formatCount, formatRelative, stripControl, truncate } from "../../util/format";
 import type { Source, TorrentResult } from "../../sources/types";
 
 type Mode = "list" | "search" | "detail" | "filter";
@@ -34,8 +35,16 @@ function DetailRow({ label, value }: { label: string; value: ReactNode }) {
   );
 }
 
-function Detail({ r, width }: { r: TorrentResult; width: number }) {
+// Rows the About block may take (a heading, the blurb, a "via" credit), out of
+// what the panel has left once the fixed detail rows are placed.
+const DETAIL_FIXED_ROWS = 16;
+const ABOUT_MAX_ROWS = 5;
+const ABOUT_CHROME_ROWS = 2;
+
+function Detail({ r, width, aboutRows }: { r: TorrentResult; width: number; aboutRows: number }) {
   const ss = sourceStyle(r.source);
+  const about = useDescription(r);
+  const aboutWidth = Math.max(10, width - 10);
   const date = formatRelative(r.added);
   const health =
     r.seeders || r.leechers ? (
@@ -79,6 +88,25 @@ function Detail({ r, width }: { r: TorrentResult; width: number }) {
           <DetailRow label="Files" value={<Text dimColor>{String(r.numFiles)}</Text>} />
         ) : null}
         {date ? <DetailRow label="Added" value={<Text dimColor>{date}</Text>} /> : null}
+        {aboutRows >= 1 && about.loading ? (
+          <DetailRow label="About" value={<Text dimColor>looking up…</Text>} />
+        ) : null}
+        {aboutRows > ABOUT_CHROME_ROWS && about.description ? (
+          <DetailRow
+            label="About"
+            value={
+              <Box flexDirection="column">
+                <Text color={COLOR.text} bold wrap="truncate-end">
+                  {about.description.heading}
+                </Text>
+                <Text dimColor>
+                  {clipWords(about.description.text, (aboutRows - ABOUT_CHROME_ROWS) * (aboutWidth - 1))}
+                </Text>
+                <Text color={COLOR.alt} dimColor>{`via ${about.description.via}`}</Text>
+              </Box>
+            }
+          />
+        ) : null}
         <DetailRow
           label="Hash"
           value={
@@ -438,7 +466,11 @@ export function Results() {
           height={panelOuter}
         >
           {mode === "detail" && detail ? (
-            <Detail r={detail} width={Math.max(10, contentWidth - 4)} />
+            <Detail
+              r={detail}
+              width={Math.max(10, contentWidth - 4)}
+              aboutRows={Math.min(ABOUT_MAX_ROWS, Math.max(0, panelOuter - DETAIL_FIXED_ROWS))}
+            />
           ) : (
             <>
               <Box>{status()}</Box>

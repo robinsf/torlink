@@ -65,6 +65,8 @@ torlink also runs without the TUI, for servers and seedboxes:
 
 Add `--daemon` to keep seed, watch, serve, or files running after you log out; `torlnk --help` has the full list of modes and flags.
 
+Opening a movie or show in the results shows a short description of it (and of the episode, when the release names one), credited to TVmaze or Wikipedia.
+
 To cap bandwidth, set `TORLINK_DOWNLOAD_LIMIT` and/or `TORLINK_UPLOAD_LIMIT` (bytes per second, with an optional `k`/`m`/`g` suffix), for example `TORLINK_UPLOAD_LIMIT=500k torlnk`.
 
 ### Sharing something of your own
@@ -109,4 +111,4 @@ Before opening a PR, skim [CONTRIBUTING.md](CONTRIBUTING.md); it lays out the ba
 
 ## Privacy
 
-Your files stay on your disk, and nothing routes through a central server; torlink only talks to the torrent network directly. Once a download finishes it keeps seeding by default, sharing it back so the next person can find it just as easily. The network only works because people pass things along, and even a few minutes makes a real difference. If you'd rather not, opt out anytime: open the Seeding tab, press `p` to pause or stop any item, and press it again to pick it back up. Always your call.
+Your files stay on your disk, and nothing routes through a central server; torlink only talks to the torrent network directly, apart from one optional lookup: when you open a movie or show's details it sends that title to TVmaze (shows and episodes) or Wikipedia (films) to fetch a short description, and nothing else. Set `TORLINK_NO_DESCRIPTIONS=1` to turn that off. Once a download finishes it keeps seeding by default, sharing it back so the next person can find it just as easily. The network only works because people pass things along, and even a few minutes makes a real difference. If you'd rather not, opt out anytime: open the Seeding tab, press `p` to pause or stop any item, and press it again to pick it back up. Always your call.

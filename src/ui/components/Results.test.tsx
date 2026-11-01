@@ -18,6 +18,11 @@ vi.mock("../hooks/useConcurrentSearch", () => ({
   useConcurrentSearch: () => searchState.current,
 }));
 
+// The details pane would otherwise look the open result up on TVmaze/Wikipedia.
+vi.mock("../hooks/useDescription", () => ({
+  useDescription: () => ({ loading: false, description: null }),
+}));
+
 const t = (infoHash: string, name: string): TorrentResult => ({
   infoHash,
   name,
