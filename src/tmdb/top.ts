@@ -26,6 +26,9 @@ export interface TopTitle {
   overview: string;
   // TMDB's popularity score, used to merge ranked lists.
   popularity?: number;
+  // Why a show is in a year's list: "New" if it debuted that year, or the
+  // season ("S4") that premiered that year.
+  tag?: string;
   // TMDB poster path, e.g. "/abc.jpg"; resolved by fetchPoster.
   poster?: string;
 }
@@ -66,7 +69,9 @@ interface DiscoverRow {
   poster_path?: string | null;
 }
 
-const MAX_TITLES = 20;
+// TMDB answers 20 titles a page, so a list of this many is several pages.
+const MAX_TITLES = 100;
+const LIST_PAGES = MAX_TITLES / 20;
 
 // The newest `count` calendar years, newest first: the years the Top picks
 // year view steps through.
@@ -78,7 +83,7 @@ export function recentYears(now: Date = new Date(), count = 5): number[] {
 // every other remote string: it lands in the terminal.
 const clean = (s: string | undefined): string => htmlToText(s ?? "");
 
-export function mapTopTitles(rows: DiscoverRow[], kind: TitleKind): TopTitle[] {
+export function mapTopTitles(rows: DiscoverRow[], kind: TitleKind, limit = MAX_TITLES): TopTitle[] {
   const out: TopTitle[] = [];
   for (const r of rows) {
     const title = clean(kind === "tv" ? r.name : r.title);
@@ -95,7 +100,7 @@ export function mapTopTitles(rows: DiscoverRow[], kind: TitleKind): TopTitle[] {
       poster: r.poster_path || undefined,
     });
   }
-  return out.slice(0, MAX_TITLES);
+  return out.slice(0, limit);
 }
 
 const TTL_MS = 15 * 60 * 1000;
@@ -109,25 +114,117 @@ async function cached<T>(key: string, load: () => Promise<T>): Promise<T> {
   return value;
 }
 
-// The discover filters that mean "this year". A film is one released that
-// year. A show counts two ways, asked separately and merged: it debuted that
-// year, or it has episodes airing that year. Neither alone is enough: the debut
-// year misses a returning show in every later year, and the air-date range
-// misses a new show TMDB has no episode dates for yet.
-function yearFilters(kind: TitleKind, year: number | undefined): Record<string, string>[] {
-  if (year === undefined) return [{}];
-  if (kind === "movie") return [{ primary_release_year: String(year) }];
-  return [
-    { first_air_date_year: String(year) },
-    { "air_date.gte": `${year}-01-01`, "air_date.lte": `${year}-12-31` },
-  ];
+// A year's shows come from two lists. Only the air-date one holds library
+// shows that crowd the popular end, so it is read deeper to leave enough with a
+// season premiering that year to fill the list.
+const DEBUT_PAGES = LIST_PAGES;
+const AIRING_PAGES = 8;
+const DETAIL_BATCH = 20;
+
+type DiscoverJson = { results?: DiscoverRow[] };
+
+// Pages 1..n of a discover query, asked together. A page failing leaves the
+// rest; throwIfAllFailed is for the caller that needs at least one.
+function discoverPages(
+  kind: TitleKind,
+  params: Record<string, string>,
+  n: number,
+  request: TmdbOptions,
+): Promise<PromiseSettledResult<DiscoverJson>[]> {
+  return Promise.allSettled(
+    Array.from({ length: n }, (_, i) =>
+      tmdbGet<DiscoverJson>(`/discover/${kind}`, { ...params, page: String(i + 1) }, request),
+    ),
+  );
+}
+
+function rowsOf(res: PromiseSettledResult<DiscoverJson>[]): DiscoverRow[] {
+  return res.flatMap((r) => (r.status === "fulfilled" ? (r.value.results ?? []) : []));
+}
+
+function throwIfAllFailed(res: PromiseSettledResult<DiscoverJson>[]): void {
+  if (res.length > 0 && res.every((r) => r.status === "rejected")) {
+    throw (res[0] as PromiseRejectedResult).reason;
+  }
+}
+
+function baseParams(provider: number, region: string): Record<string, string> {
+  return {
+    with_watch_providers: String(provider),
+    watch_region: region,
+    with_watch_monetization_types: "flatrate",
+    sort_by: "popularity.desc",
+    language: "en-US",
+  };
+}
+
+// The newest season that premiered in `year`, as "S4", or null if none did.
+// Fetched per show and cached on its own, since the same show turns up in many
+// platforms' and years' lists.
+async function seasonPremiere(id: number, year: number, request: TmdbOptions): Promise<string | null> {
+  try {
+    const seasons = await cached(`seasons|${id}`, async () => {
+      const json = await tmdbGet<DetailsJson>(`/tv/${id}`, { language: "en-US" }, request);
+      return (json.seasons ?? [])
+        .filter((x) => typeof x.season_number === "number" && x.season_number > 0)
+        .map((x) => ({ number: x.season_number!, airDate: x.air_date ?? "" }));
+    });
+    const hit = seasons.filter((x) => x.airDate.startsWith(String(year))).map((x) => x.number);
+    return hit.length > 0 ? `S${Math.max(...hit)}` : null;
+  } catch {
+    // One show's details failing drops that show, not the list.
+    return null;
+  }
+}
+
+// A show counts for a year when it debuted in it or a season premiered in it.
+// Neither TMDB filter alone says that: the debut year misses a returning show
+// in every later year, and the air-date range also admits every long-running
+// show that merely aired an episode (so a top 20 by popularity is all library
+// shows, and a new show with little popularity yet falls off it). So the debut
+// list and the air-date list are both fetched, the air-date ones are checked
+// for a season that premiered that year, and the lot is ranked by popularity
+// and tagged with why it is there. Scripted shows and miniseries only; talk
+// shows, game shows and news are not picks.
+async function showsForYear(
+  provider: number,
+  region: string,
+  year: number,
+  request: TmdbOptions,
+): Promise<TopTitle[]> {
+  const base = { ...baseParams(provider, region), with_type: "2|4" };
+  const [debutRes, airingRes] = await Promise.all([
+    discoverPages("tv", { ...base, first_air_date_year: String(year) }, DEBUT_PAGES, request),
+    discoverPages(
+      "tv",
+      { ...base, "air_date.gte": `${year}-01-01`, "air_date.lte": `${year}-12-31` },
+      AIRING_PAGES,
+      request,
+    ),
+  ]);
+  // Pages failing leaves the others' rows; every page failing is an error.
+  throwIfAllFailed([...debutRes, ...airingRes]);
+
+  const debut = mapTopTitles(rowsOf(debutRes), "tv", Infinity).map((t) => ({ ...t, tag: "New" }));
+  const known = new Set(debut.map((t) => t.id));
+  const airing = mapTopTitles(rowsOf(airingRes), "tv", Infinity).filter((t) => !known.has(t.id));
+
+  const returning: TopTitle[] = [];
+  for (let i = 0; i < airing.length; i += DETAIL_BATCH) {
+    const batch = airing.slice(i, i + DETAIL_BATCH);
+    const tags = await Promise.all(batch.map((t) => seasonPremiere(t.id, year, request)));
+    batch.forEach((t, n) => {
+      if (tags[n]) returning.push({ ...t, tag: tags[n]! });
+    });
+  }
+  return mergeTop([debut, returning]);
 }
 
 // What is most popular on a platform, for shows or for films, among titles
 // streaming included with a subscription in the user's region. With a `year`,
-// a film is one released that year and a show is one that debuted or has
-// episodes airing that year, so a returning show counts for every year it is on
-// air; without a year, whatever is popular right now.
+// a film is one released that year and a show is one that debuted or had a
+// season premiere that year (tagged with which); without a year, whatever is
+// popular right now. A hundred of each.
 export async function topTitles(
   platformId: string,
   kind: TitleKind,
@@ -138,35 +235,26 @@ export async function topTitles(
   const region = tmdbRegion();
   const { year, ...request } = opts;
   return cached(`top|${platformId}|${kind}|${region}|${year ?? "now"}`, async () => {
-    const asks = yearFilters(kind, year).map((filter) =>
-      tmdbGet<{ results?: DiscoverRow[] }>(
-        `/discover/${kind}`,
-        {
-          with_watch_providers: String(provider),
-          watch_region: region,
-          with_watch_monetization_types: "flatrate",
-          sort_by: "popularity.desc",
-          language: "en-US",
-          ...filter,
-        },
-        request,
-      ),
+    if (kind === "tv" && year !== undefined) return showsForYear(provider, region, year, request);
+    const res = await discoverPages(
+      kind,
+      {
+        ...baseParams(provider, region),
+        ...(year === undefined ? {} : { primary_release_year: String(year) }),
+      },
+      LIST_PAGES,
+      request,
     );
-    // One ask failing leaves the other's list; both failing is an error.
-    const settled = await Promise.allSettled(asks);
-    const ok = settled.filter((r): r is PromiseFulfilledResult<{ results?: DiscoverRow[] }> => r.status === "fulfilled");
-    if (ok.length === 0) throw (settled[0] as PromiseRejectedResult).reason;
-    return mergeTop(ok.map((r) => mapTopTitles(r.value.results ?? [], kind)));
+    throwIfAllFailed(res);
+    return mergeTop([mapTopTitles(rowsOf(res), kind, Infinity)]);
   });
 }
 
-// Lists merged into one: each title once, the most popular first.
-export function mergeTop(lists: TopTitle[][]): TopTitle[] {
+// Lists merged into one: each title once, the most popular first, up to `limit`.
+export function mergeTop(lists: TopTitle[][], limit = MAX_TITLES): TopTitle[] {
   const byId = new Map<number, TopTitle>();
   for (const t of lists.flat()) if (!byId.has(t.id)) byId.set(t.id, t);
-  const merged = [...byId.values()];
-  if (lists.length > 1) merged.sort((a, b) => (b.popularity ?? 0) - (a.popularity ?? 0));
-  return merged.slice(0, MAX_TITLES);
+  return [...byId.values()].sort((a, b) => (b.popularity ?? 0) - (a.popularity ?? 0)).slice(0, limit);
 }
 
 interface DetailsJson {
@@ -174,7 +262,7 @@ interface DetailsJson {
   tagline?: string;
   runtime?: number;
   status?: string;
-  seasons?: { season_number?: number; name?: string; episode_count?: number }[];
+  seasons?: { season_number?: number; name?: string; episode_count?: number; air_date?: string | null }[];
 }
 
 export async function titleDetails(

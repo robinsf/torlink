@@ -15,6 +15,7 @@ import type { Pixels } from "../../tmdb/poster";
 import { recentYears, type TitleKind, type TopTitle } from "../../tmdb/top";
 
 const RATING_W = 6;
+const TAG_W = 4;
 
 // A poster needs this much height and leaves the text this much width.
 const POSTER_MIN_ROWS = 8;
@@ -177,6 +178,8 @@ export function Top() {
   const top = useTopTitles(platform.id, kind, year);
   const titles = top.value ?? [];
   const clamped = Math.min(cursor, Math.max(0, titles.length - 1));
+  // A year's shows say why they are there: new that year, or which season.
+  const hasTags = titles.some((t) => t.tag);
 
   // An open detail owns esc (it closes the detail rather than leaving the
   // pane), the same hand-off Results makes.
@@ -254,7 +257,10 @@ export function Top() {
   );
 
   return (
-    <Panel title={`top picks ${ICON.dot} ${platform.label}${year === undefined ? "" : ` ${ICON.dot} ${year}`}`} width={contentWidth} focused={focused} height={panelH}>
+    <Panel title={`top picks ${ICON.dot} ${platform.label}${year === undefined ? "" : ` ${ICON.dot} ${year}`}`} width={contentWidth} focused={focused}
+      count={!detail && titles.length > 0 ? `(${titles.length})` : undefined}
+      height={panelH}
+    >
       {detail ? (
         <Detail title={detail} platformLabel={platform.label} width={Math.max(10, contentWidth - 4)} rows={innerRows} />
       ) : (
@@ -289,6 +295,13 @@ export function Top() {
                         {t.year ? ` (${t.year})` : ""}
                       </Text>
                     </Box>
+                    {hasTags ? (
+                      <Box width={TAG_W} flexShrink={0} marginLeft={1} justifyContent="flex-end">
+                        <Text color={t.tag === "New" ? COLOR.good : undefined} dimColor={t.tag !== "New"} bold={t.tag === "New"}>
+                          {t.tag ?? ""}
+                        </Text>
+                      </Box>
+                    ) : null}
                     <Box width={RATING_W} flexShrink={0} marginLeft={1} justifyContent="flex-end">
                       <Text dimColor={!here} bold={here}>
                         {t.rating !== undefined ? `★ ${t.rating.toFixed(1)}` : ""}

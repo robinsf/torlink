@@ -104,72 +104,99 @@ describe("topTitles", () => {
     expect(out[1]).toMatchObject({ year: undefined, rating: undefined });
   });
 
-  it("asks for a show both ways, debuted that year and airing that year, and a film by release year", async () => {
+  it("asks for a film by its release year, a hundred deep, with no show filters", async () => {
     vi.stubEnv("TORLINK_TMDB_KEY", "k");
     const { topTitles } = await import("./top");
     mockFetch.mockResolvedValue(reply({ results: [] }));
-    await topTitles("netflix", "tv", { year: 2024 });
-    const tv = [0, 1].map((n) => askedUrl(n).searchParams);
-    expect(tv.some((p) => p.get("first_air_date_year") === "2024")).toBe(true);
-    const air = tv.find((p) => p.has("air_date.gte"))!;
-    expect(air.get("air_date.gte")).toBe("2024-01-01");
-    expect(air.get("air_date.lte")).toBe("2024-12-31");
-    expect(mockFetch).toHaveBeenCalledTimes(2);
-
-    mockFetch.mockClear();
     await topTitles("netflix", "movie", { year: 2023 });
-    expect(mockFetch).toHaveBeenCalledTimes(1);
-    expect(askedUrl(0).searchParams.get("primary_release_year")).toBe("2023");
-    expect(askedUrl(0).searchParams.has("air_date.gte")).toBe(false);
-  });
-
-  it("merges the two show lists: each title once, most popular first", async () => {
-    vi.stubEnv("TORLINK_TMDB_KEY", "k");
-    const { topTitles } = await import("./top");
-    // A new show only the debut query knows, a returning show only the
-    // air-date query knows, and one both return.
-    const debut = { results: [
-      { id: 1, name: "Neagley", popularity: 90 },
-      { id: 3, name: "Both", popularity: 50 },
-    ] };
-    const airing = { results: [
-      { id: 2, name: "Reacher", popularity: 200 },
-      { id: 3, name: "Both", popularity: 50 },
-    ] };
-    mockFetch.mockImplementation(async (url) =>
-      reply(String(url).includes("first_air_date_year") ? debut : airing),
-    );
-    const out = await topTitles("prime", "tv", { year: 2026 });
-    expect(out.map((t) => t.title)).toEqual(["Reacher", "Neagley", "Both"]);
-  });
-
-  it("keeps the other list when one of the two requests fails, and fails when both do", async () => {
-    vi.stubEnv("TORLINK_TMDB_KEY", "k");
-    const { topTitles } = await import("./top");
-    mockFetch.mockImplementation(async (url) =>
-      String(url).includes("first_air_date_year")
-        ? reply({}, 503)
-        : reply({ results: [{ id: 2, name: "Reacher", popularity: 1 }] }),
-    );
-    expect((await topTitles("prime", "tv", { year: 2025 })).map((t) => t.title)).toEqual(["Reacher"]);
-
-    mockFetch.mockReset();
-    mockFetch.mockResolvedValue(reply({}, 503));
-    await expect(topTitles("prime", "tv", { year: 2024 })).rejects.toMatchObject({ status: 503 });
-  });
-
-  it("keeps each year's list apart in the cache, and sends no year for popular now", async () => {
-    vi.stubEnv("TORLINK_TMDB_KEY", "k");
-    const { topTitles } = await import("./top");
-    mockFetch.mockResolvedValue(reply({ results: [] }));
-    await topTitles("hulu", "tv");
-    await topTitles("hulu", "tv", { year: 2025 });
-    await topTitles("hulu", "tv", { year: 2025 });
-    await topTitles("hulu", "tv", { year: 2024 });
-    // popular now: 1 request; each show year: 2 requests, the repeat cached.
     expect(mockFetch).toHaveBeenCalledTimes(5);
-    expect(askedUrl(0).searchParams.has("air_date.gte")).toBe(false);
-    expect(askedUrl(0).searchParams.has("first_air_date_year")).toBe(false);
+    for (let n = 0; n < 5; n++) {
+      const p = askedUrl(n).searchParams;
+      expect(p.get("primary_release_year")).toBe("2023");
+      expect(p.has("air_date.gte")).toBe(false);
+      expect(p.has("with_type")).toBe(false);
+    }
+  });
+
+  describe("a show's year", () => {
+    // Prime shows for 2026: Neagley debuted this year, Both debuted this year
+    // and also airs, Reacher is a returning show whose season 4 premiered this
+    // year, Family Guy has aired episodes this year but no season premiered,
+    // and Bare has no season data at all.
+    const DEBUT = [
+      { id: 1, name: "Neagley", popularity: 26 },
+      { id: 3, name: "Both", popularity: 50 },
+    ];
+    const AIRING = [
+      { id: 4, name: "Family Guy", popularity: 2000 },
+      { id: 2, name: "Reacher", popularity: 180 },
+      { id: 3, name: "Both", popularity: 50 },
+      { id: 5, name: "Bare", popularity: 500 },
+    ];
+    const SEASONS: Record<string, unknown> = {
+      "/3/tv/2": { seasons: [{ season_number: 0, air_date: "2026-01-01" }, { season_number: 3, air_date: "2025-02-20" }, { season_number: 4, air_date: "2026-12-11" }] },
+      "/3/tv/4": { seasons: [{ season_number: 24, air_date: "2025-09-28" }] },
+      "/3/tv/5": { seasons: [] },
+    };
+    const serve = async (url: unknown): Promise<Response> => {
+      const u = new URL(String(url));
+      if (u.pathname === "/3/discover/tv") {
+        const first = u.searchParams.has("first_air_date_year");
+        return reply({ results: u.searchParams.get("page") === "1" ? (first ? DEBUT : AIRING) : [] });
+      }
+      return reply(SEASONS[u.pathname] ?? {}, SEASONS[u.pathname] ? 200 : 404);
+    };
+
+    it("lists shows that debuted or had a season premiere that year, tagged, most popular first", async () => {
+      vi.stubEnv("TORLINK_TMDB_KEY", "k");
+      const { topTitles } = await import("./top");
+      mockFetch.mockImplementation(serve);
+      const out = await topTitles("prime", "tv", { year: 2026 });
+      expect(out.map((t) => [t.title, t.tag])).toEqual([
+        ["Reacher", "S4"],
+        ["Both", "New"],
+        ["Neagley", "New"],
+      ]);
+    });
+
+    it("asks scripted shows only, both ways, and checks seasons only for shows the debut list lacks", async () => {
+      vi.stubEnv("TORLINK_TMDB_KEY", "k");
+      const { topTitles } = await import("./top");
+      mockFetch.mockImplementation(serve);
+      await topTitles("prime", "tv", { year: 2026 });
+      const urls = mockFetch.mock.calls.map((c) => new URL(String(c[0])));
+      const discover = urls.filter((u) => u.pathname === "/3/discover/tv");
+      expect(discover).toHaveLength(5 + 8);
+      expect(discover.every((u) => u.searchParams.get("with_type") === "2|4")).toBe(true);
+      expect(discover.filter((u) => u.searchParams.get("first_air_date_year") === "2026")).toHaveLength(5);
+      const air = discover.filter((u) => u.searchParams.has("air_date.gte"));
+      expect(air).toHaveLength(8);
+      expect(air[0]!.searchParams.get("air_date.gte")).toBe("2026-01-01");
+      expect(air[0]!.searchParams.get("air_date.lte")).toBe("2026-12-31");
+      // Season checks: Family Guy, Reacher, Bare; not Both, which debuted.
+      const detail = urls.filter((u) => u.pathname.startsWith("/3/tv/")).map((u) => u.pathname).sort();
+      expect(detail).toEqual(["/3/tv/2", "/3/tv/4", "/3/tv/5"]);
+    });
+
+    it("drops a show whose season check fails, and answers a repeat from its cache", async () => {
+      vi.stubEnv("TORLINK_TMDB_KEY", "k");
+      const { topTitles } = await import("./top");
+      mockFetch.mockImplementation(async (url) =>
+        new URL(String(url)).pathname === "/3/tv/2" ? reply({}, 503) : serve(url),
+      );
+      const out = await topTitles("prime", "tv", { year: 2026 });
+      expect(out.map((t) => t.title)).toEqual(["Both", "Neagley"]);
+      const calls = mockFetch.mock.calls.length;
+      await topTitles("prime", "tv", { year: 2026 });
+      expect(mockFetch).toHaveBeenCalledTimes(calls);
+    });
+
+    it("fails when every page fails", async () => {
+      vi.stubEnv("TORLINK_TMDB_KEY", "k");
+      const { topTitles } = await import("./top");
+      mockFetch.mockResolvedValue(reply({}, 503));
+      await expect(topTitles("prime", "tv", { year: 2026 })).rejects.toMatchObject({ status: 503 });
+    });
   });
 
   it("lists the newest five calendar years, newest first", async () => {
@@ -189,15 +216,52 @@ describe("topTitles", () => {
     expect(dune).toMatchObject({ title: "Dune", year: "2021", kind: "movie" });
   });
 
+  it("reads a hundred titles from five pages, in order, each once", async () => {
+    vi.stubEnv("TORLINK_TMDB_KEY", "k");
+    const { topTitles } = await import("./top");
+    // TMDB answers 20 a page; ids 1..100 by descending popularity, with one
+    // title repeated across a page boundary.
+    mockFetch.mockImplementation(async (url) => {
+      const page = Number(new URL(String(url)).searchParams.get("page"));
+      const rows = Array.from({ length: 20 }, (_, n) => {
+        const id = (page - 1) * 20 + n + 1;
+        return { id, name: `Show ${id}`, popularity: 1000 - id };
+      });
+      if (page === 2) rows[0] = { id: 20, name: "Show 20", popularity: 980 };
+      return reply({ results: rows });
+    });
+    const out = await topTitles("netflix", "tv");
+    expect(mockFetch).toHaveBeenCalledTimes(5);
+    expect([0, 1, 2, 3, 4].map((n) => askedUrl(n).searchParams.get("page")).sort()).toEqual(["1", "2", "3", "4", "5"]);
+    expect(out).toHaveLength(99);
+    expect(out[0]!.title).toBe("Show 1");
+    expect(new Set(out.map((t) => t.id)).size).toBe(out.length);
+  });
+
   it("answers a repeat from its cache and skips unknown platforms", async () => {
     vi.stubEnv("TORLINK_TMDB_KEY", "k");
     const { topTitles } = await import("./top");
-    mockFetch.mockResolvedValueOnce(reply(SHOWS));
+    mockFetch.mockResolvedValue(reply({ results: [] }));
     await topTitles("hulu", "tv");
     await topTitles("hulu", "tv");
-    expect(mockFetch).toHaveBeenCalledTimes(1);
+    expect(mockFetch).toHaveBeenCalledTimes(5);
     expect(await topTitles("crunchyroll", "tv")).toEqual([]);
-    expect(mockFetch).toHaveBeenCalledTimes(1);
+    expect(mockFetch).toHaveBeenCalledTimes(5);
+  });
+
+  it("keeps the pages that load when some fail, and fails only when all do", async () => {
+    vi.stubEnv("TORLINK_TMDB_KEY", "k");
+    const { topTitles } = await import("./top");
+    mockFetch.mockImplementation(async (url) =>
+      new URL(String(url)).searchParams.get("page") === "1"
+        ? reply({ results: [{ id: 1, name: "Kept", popularity: 5 }] })
+        : reply({}, 503),
+    );
+    expect((await topTitles("peacock", "tv")).map((t) => t.title)).toEqual(["Kept"]);
+
+    mockFetch.mockReset();
+    mockFetch.mockResolvedValue(reply({}, 503));
+    await expect(topTitles("disney", "tv")).rejects.toMatchObject({ status: 503 });
   });
 });
 
