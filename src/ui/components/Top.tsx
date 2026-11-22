@@ -18,7 +18,7 @@ const RATING_W = 6;
 
 // A poster needs this much height and leaves the text this much width.
 const POSTER_MIN_ROWS = 8;
-const POSTER_MAX_ROWS = 12;
+const POSTER_MAX_ROWS = 24;
 const POSTER_GAP = 2;
 const TEXT_MIN_W = 36;
 

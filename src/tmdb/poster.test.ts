@@ -40,7 +40,7 @@ describe("fetchPoster", () => {
     const { fetchPoster } = await import("./poster");
     mockFetch.mockResolvedValueOnce(bytesReply(sampleJpeg()));
     const img = await fetchPoster("/abc123.jpg");
-    expect(String(mockFetch.mock.calls[0]![0])).toBe("https://image.tmdb.org/t/p/w154/abc123.jpg");
+    expect(String(mockFetch.mock.calls[0]![0])).toBe("https://image.tmdb.org/t/p/w342/abc123.jpg");
     expect(img).toMatchObject({ width: 16, height: 24 });
     expect(img!.data).toHaveLength(16 * 24 * 4);
     // Top of the image is red, bottom blue (JPEG is lossy, so approximately).

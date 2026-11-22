@@ -1,9 +1,9 @@
 import jpeg from "jpeg-js";
 import { fetchResilient, HttpError, USER_AGENT, type FetchImpl } from "../util/net";
 
-// The smallest size TMDB serves is plenty: a poster is drawn a few dozen cells
-// wide.
-const IMAGE_BASE = "https://image.tmdb.org/t/p/w154";
+// 342 px wide is several times the resolution a poster is drawn at, so the
+// averaging in renderPoster has detail to work from even on a tall pane.
+const IMAGE_BASE = "https://image.tmdb.org/t/p/w342";
 
 // A poster is the one thing here fetched without the API key, from TMDB's
 // image host. TORLINK_NO_POSTERS turns it off.
@@ -23,7 +23,7 @@ export interface Pixels {
 const POSTER_PATH = /^\/[A-Za-z0-9_-]{1,64}\.jpg$/;
 
 const MAX_BYTES = 512 * 1024;
-const MAX_ENTRIES = 50;
+const MAX_ENTRIES = 20;
 const cache = new Map<string, Pixels>();
 
 export interface PosterOptions {
