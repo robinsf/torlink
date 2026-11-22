@@ -1,6 +1,8 @@
 import { useMemo } from "react";
 import { Box, Text } from "ink";
 import { posterCols, renderPoster, toRuns } from "../poster";
+import { useKittyImage } from "../hooks/useKittyImage";
+import { imageColor, placeholderRows } from "../kitty";
 import type { Pixels } from "../../tmdb/poster";
 
 // A poster needs this much height and leaves the text this much width.
@@ -19,10 +21,24 @@ export function posterBox(rows: number, width: number): { rows: number; cols: nu
   return { rows: h, cols: posterCols(h) };
 }
 
-// The poster as half-block cells; an empty box of the same size while the
-// image is still loading, so the text does not jump when it lands.
+// The poster: a real inline image on a terminal that draws them (Ghostty,
+// Kitty), otherwise coloured block characters. An empty box of the same size
+// while the image is still loading, so the text does not jump when it lands.
 export function Poster({ img, cols, rows }: { img: Pixels | null; cols: number; rows: number }) {
   const cells = useMemo(() => (img ? renderPoster(img, cols, rows) : null), [img, cols, rows]);
+  const imageId = useKittyImage(img, cols, rows);
+  const lines = useMemo(() => (imageId === null ? null : placeholderRows(rows, cols)), [imageId, rows, cols]);
+  if (lines && imageId !== null) {
+    return (
+      <Box flexDirection="column" width={cols} flexShrink={0}>
+        {lines.map((line, y) => (
+          <Text key={y} color={imageColor(imageId)}>
+            {line}
+          </Text>
+        ))}
+      </Box>
+    );
+  }
   if (!cells) return <Box width={cols} height={rows} flexShrink={0} />;
   return (
     <Box flexDirection="column" width={cols} flexShrink={0}>

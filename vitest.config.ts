@@ -10,6 +10,10 @@ export default defineConfig({
   test: {
     env: {
       TORLINK_STATE_DIR: path.join(os.tmpdir(), "torlink-test-state"),
+      // Tests run in whatever terminal started them; blocks keep a Ghostty or
+      // Kitty session from having image escape sequences written into its
+      // output. The tests for the image path turn the mode on themselves.
+      TORLINK_POSTER_MODE: "blocks",
     },
   },
 });
