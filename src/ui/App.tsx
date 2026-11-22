@@ -40,6 +40,7 @@ import { HelpOverlay } from "./components/HelpOverlay";
 import { Results } from "./components/Results";
 import { Downloads } from "./components/Downloads";
 import { Seeding } from "./components/Seeding";
+import { Top } from "./components/Top";
 import { Spinner } from "./components/Spinner";
 import { TabTitle } from "./components/TabTitle";
 import { Splash } from "./views/Splash";
@@ -711,6 +712,8 @@ export function App({
               <Downloads />
             ) : section === "seeding" ? (
               <Seeding />
+            ) : section === "top" ? (
+              <Top />
             ) : (
               <Results />
             )}

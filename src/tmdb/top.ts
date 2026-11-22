@@ -1,0 +1,173 @@
+import { htmlToText } from "../describe/text";
+import { tmdbGet, tmdbRegion, type TmdbOptions } from "./client";
+
+export type TitleKind = "tv" | "movie";
+
+// TMDB's ids for each streaming service (the same ids JustWatch uses), keyed
+// by torlink's platform ids.
+export const PROVIDER_IDS: Record<string, number> = {
+  netflix: 8,
+  prime: 9,
+  appletv: 350,
+  disney: 337,
+  max: 1899,
+  hulu: 15,
+  peacock: 386,
+  paramount: 531,
+};
+
+export interface TopTitle {
+  id: number;
+  kind: TitleKind;
+  title: string;
+  year?: string;
+  // TMDB's 0-10 user score; undefined when nobody has voted.
+  rating?: number;
+  overview: string;
+}
+
+export interface Season {
+  number: number;
+  name: string;
+  episodes: number;
+}
+
+export interface TitleDetails {
+  genres: string[];
+  tagline?: string;
+  // A film's running time in minutes.
+  runtime?: number;
+  status?: string;
+  // A show's seasons, specials (season 0) left out.
+  seasons: Season[];
+}
+
+export interface Episode {
+  number: number;
+  name: string;
+  overview: string;
+  airDate?: string;
+}
+
+interface DiscoverRow {
+  id?: number;
+  name?: string;
+  title?: string;
+  first_air_date?: string;
+  release_date?: string;
+  vote_average?: number;
+  vote_count?: number;
+  overview?: string;
+}
+
+const MAX_TITLES = 20;
+
+// Remote text goes through the same flattening and control-character strip as
+// every other remote string: it lands in the terminal.
+const clean = (s: string | undefined): string => htmlToText(s ?? "");
+
+export function mapTopTitles(rows: DiscoverRow[], kind: TitleKind): TopTitle[] {
+  const out: TopTitle[] = [];
+  for (const r of rows) {
+    const title = clean(kind === "tv" ? r.name : r.title);
+    if (typeof r.id !== "number" || !title) continue;
+    const date = kind === "tv" ? r.first_air_date : r.release_date;
+    out.push({
+      id: r.id,
+      kind,
+      title,
+      year: date && /^\d{4}/.test(date) ? date.slice(0, 4) : undefined,
+      rating: r.vote_count && r.vote_average ? Math.round(r.vote_average * 10) / 10 : undefined,
+      overview: clean(r.overview),
+    });
+  }
+  return out.slice(0, MAX_TITLES);
+}
+
+const TTL_MS = 15 * 60 * 1000;
+const cache = new Map<string, { at: number; value: unknown }>();
+
+async function cached<T>(key: string, load: () => Promise<T>): Promise<T> {
+  const hit = cache.get(key);
+  if (hit && Date.now() - hit.at < TTL_MS) return hit.value as T;
+  const value = await load();
+  cache.set(key, { at: Date.now(), value });
+  return value;
+}
+
+// What is most popular on a platform right now, for shows or for films, among
+// titles streaming included with a subscription in the user's region.
+export async function topTitles(
+  platformId: string,
+  kind: TitleKind,
+  opts: TmdbOptions = {},
+): Promise<TopTitle[]> {
+  const provider = PROVIDER_IDS[platformId];
+  if (provider === undefined) return [];
+  const region = tmdbRegion();
+  return cached(`top|${platformId}|${kind}|${region}`, async () => {
+    const json = await tmdbGet<{ results?: DiscoverRow[] }>(
+      `/discover/${kind}`,
+      {
+        with_watch_providers: String(provider),
+        watch_region: region,
+        with_watch_monetization_types: "flatrate",
+        sort_by: "popularity.desc",
+        language: "en-US",
+      },
+      opts,
+    );
+    return mapTopTitles(json.results ?? [], kind);
+  });
+}
+
+interface DetailsJson {
+  genres?: { name?: string }[];
+  tagline?: string;
+  runtime?: number;
+  status?: string;
+  seasons?: { season_number?: number; name?: string; episode_count?: number }[];
+}
+
+export async function titleDetails(
+  kind: TitleKind,
+  id: number,
+  opts: TmdbOptions = {},
+): Promise<TitleDetails> {
+  return cached(`details|${kind}|${id}`, async () => {
+    const json = await tmdbGet<DetailsJson>(`/${kind}/${id}`, { language: "en-US" }, opts);
+    return {
+      genres: (json.genres ?? []).map((g) => clean(g.name)).filter(Boolean),
+      tagline: clean(json.tagline) || undefined,
+      runtime: json.runtime && json.runtime > 0 ? json.runtime : undefined,
+      status: clean(json.status) || undefined,
+      seasons: (json.seasons ?? [])
+        .filter((s) => typeof s.season_number === "number" && s.season_number > 0)
+        .map((s) => ({
+          number: s.season_number!,
+          name: clean(s.name) || `Season ${s.season_number}`,
+          episodes: s.episode_count ?? 0,
+        })),
+    };
+  });
+}
+
+export async function seasonEpisodes(
+  id: number,
+  season: number,
+  opts: TmdbOptions = {},
+): Promise<Episode[]> {
+  return cached(`season|${id}|${season}`, async () => {
+    const json = await tmdbGet<{
+      episodes?: { episode_number?: number; name?: string; overview?: string; air_date?: string | null }[];
+    }>(`/tv/${id}/season/${season}`, { language: "en-US" }, opts);
+    return (json.episodes ?? [])
+      .filter((e) => typeof e.episode_number === "number")
+      .map((e) => ({
+        number: e.episode_number!,
+        name: clean(e.name) || `Episode ${e.episode_number}`,
+        overview: clean(e.overview),
+        airDate: e.air_date && /^\d{4}-\d{2}-\d{2}$/.test(e.air_date) ? e.air_date : undefined,
+      }));
+  });
+}

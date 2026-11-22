@@ -90,6 +90,20 @@ export function footerHints(
       { keys: "q", label: "Quit" },
     ];
   }
+  if (section === "top") {
+    if (resultFocus === "detail") {
+      return [{ keys: "s", label: "Find torrents" }, { keys: "[ ]", label: "Season" }, { keys: "esc", label: "Back" }, ALWAYS];
+    }
+    return [
+      NAVIGATE,
+      { keys: "↵", label: "Details" },
+      { keys: "s", label: "Find torrents" },
+      { keys: "[ ]", label: "Platform" },
+      { keys: "v", label: "Shows/Movies" },
+      SWITCH,
+      ALWAYS,
+    ];
+  }
   if (section === "seeding") {
     const label =
       seedFocus === "seeding" ? "Pause" : seedFocus === "missing" ? "Retry" : "Resume";

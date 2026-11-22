@@ -222,6 +222,10 @@ description of it, and of the episode when the release names one, on TVmaze
 (shows) or Wikipedia (films), sending just the cleaned-up title. Set
 TORLINK_NO_DESCRIPTIONS=1 to send nothing.
 
+top picks (TUI): the Top picks tab lists what is popular on each streaming
+platform, from TMDB. It needs TORLINK_TMDB_KEY (a free key from
+themoviedb.org); TORLINK_TMDB_REGION=GB picks another country (default US).
+
 speed limits (all modes): set TORLINK_DOWNLOAD_LIMIT and/or TORLINK_UPLOAD_LIMIT
 to cap the whole client, in bytes per second with an optional k/m/g suffix
 (e.g. 2m, 500k, 1.5MB/s). Unset, 0 or off means unlimited.

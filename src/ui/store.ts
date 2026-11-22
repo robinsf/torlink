@@ -10,7 +10,7 @@ export type View = "splash" | "browser";
 
 export type Category = "all" | "games" | "movies" | "tv" | "anime" | `platform-${string}`;
 
-export type Section = Category | "downloads" | "seeding";
+export type Section = Category | "downloads" | "seeding" | "top";
 
 export interface CategoryDef {
   key: Category;

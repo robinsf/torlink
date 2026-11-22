@@ -10,7 +10,10 @@ interface NavItem {
 
 const toNav = (c: (typeof CATEGORIES)[number]): NavItem => ({ key: c.key as Section, label: c.label });
 const FILTERS: NavItem[] = CATEGORIES.filter((c) => !c.platform).map(toNav);
-const PLATFORMS: NavItem[] = CATEGORIES.filter((c) => c.platform).map(toNav);
+const PLATFORMS: NavItem[] = [
+  { key: "top", label: "Top picks" },
+  ...CATEGORIES.filter((c) => c.platform).map(toNav),
+];
 const LIBRARY: NavItem[] = [
   { key: "downloads", label: "Downloads" },
   { key: "seeding", label: "Seeding" },
