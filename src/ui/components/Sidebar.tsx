@@ -8,10 +8,9 @@ interface NavItem {
   label: string;
 }
 
-const FILTERS: NavItem[] = CATEGORIES.map((c) => ({
-  key: c.key as Section,
-  label: c.label,
-}));
+const toNav = (c: (typeof CATEGORIES)[number]): NavItem => ({ key: c.key as Section, label: c.label });
+const FILTERS: NavItem[] = CATEGORIES.filter((c) => !c.platform).map(toNav);
+const PLATFORMS: NavItem[] = CATEGORIES.filter((c) => c.platform).map(toNav);
 const LIBRARY: NavItem[] = [
   { key: "downloads", label: "Downloads" },
   { key: "seeding", label: "Seeding" },
@@ -19,7 +18,7 @@ const LIBRARY: NavItem[] = [
 
 const BADGED = (key: Section): boolean => key === "downloads" || key === "seeding";
 
-const GROUPS: NavItem[][] = [FILTERS, LIBRARY];
+const GROUPS: NavItem[][] = [FILTERS, PLATFORMS, LIBRARY];
 
 const NAV: NavItem[] = GROUPS.flat();
 

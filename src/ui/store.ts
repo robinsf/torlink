@@ -4,19 +4,32 @@ import type { DownloadQueue } from "../download/queue";
 import type { HistoryItem } from "../download/history";
 import type { QueueItem, SeedItem } from "../download/types";
 import type { SourceGroup, SourceId } from "../sources/types";
+import { PLATFORM_TABS } from "./platform";
 
 export type View = "splash" | "browser";
 
-export type Category = "all" | "games" | "movies" | "tv" | "anime";
+export type Category = "all" | "games" | "movies" | "tv" | "anime" | `platform-${string}`;
 
 export type Section = Category | "downloads" | "seeding";
 
-export const CATEGORIES: { key: Category; label: string; group?: SourceGroup }[] = [
+export interface CategoryDef {
+  key: Category;
+  label: string;
+  // The source tab a category shows, or the streaming platform it shows
+  // (never both).
+  group?: SourceGroup;
+  platform?: string;
+}
+
+export const CATEGORIES: CategoryDef[] = [
   { key: "all", label: "All" },
   { key: "games", label: "Games", group: "Games" },
   { key: "movies", label: "Movies", group: "Movies" },
   { key: "tv", label: "TV", group: "TV" },
   { key: "anime", label: "Anime", group: "Anime" },
+  ...PLATFORM_TABS.map(
+    (p): CategoryDef => ({ key: `platform-${p.id}`, label: p.label, platform: p.id }),
+  ),
 ];
 
 export type Region = "sidebar" | "content" | "help";

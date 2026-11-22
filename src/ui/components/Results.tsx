@@ -12,7 +12,7 @@ import { getSource, SOURCES } from "../../sources/registry";
 import { stickCursor, wrapStep, windowStart, resultsPanelOuter } from "../move";
 import { sortResults, nextSort, sortLabel, sortArrow, type Sort, type SortField } from "../sort";
 import { filterResults } from "../filter";
-import { detectPlatform, platformsIn } from "../platform";
+import { detectPlatform, PLATFORMS, platformQuery } from "../platform";
 import { COLOR, GUTTER, ICON, sourceStyle } from "../theme";
 import { cleanText, clipWords, formatBytes, formatCount, formatRelative, stripControl, truncate } from "../../util/format";
 import type { Source, TorrentResult } from "../../sources/types";
@@ -24,6 +24,12 @@ type Mode = "list" | "search" | "detail" | "filter";
 const MARK_W = 2;
 
 const PLACEHOLDER = "Search or paste a magnet link…";
+
+// A platform tab only asks the sources that carry video; games and anime
+// sources would just answer a platform tag with noise.
+const VIDEO_SOURCES: readonly Source[] = SOURCES.filter(
+  (s) => s.groups?.includes("Movies") || s.groups?.includes("TV"),
+);
 
 function DetailRow({ label, value }: { label: string; value: ReactNode }) {
   return (
@@ -167,27 +173,35 @@ export function Results() {
     listRows,
   } = useStore();
 
-  const search = useConcurrentSearch(query);
+  const activeCat = CATEGORIES.find((c) => c.key === section);
+  const activePlatform = activeCat?.platform
+    ? PLATFORMS.find((p) => p.id === activeCat.platform) ?? null
+    : null;
+  // A platform tab searches for that platform's tag (narrowed by the query);
+  // any other tab searches for the query as typed.
+  const search = useConcurrentSearch(
+    activePlatform ? platformQuery(activePlatform, query) : query,
+    activePlatform ? VIDEO_SOURCES : undefined,
+  );
+
+  // What a tab shows out of everything the search found: its source group, or
+  // the releases that name its platform.
+  const inTab = (list: TorrentResult[]): TorrentResult[] =>
+    activePlatform
+      ? list.filter((r) => detectPlatform(r.name)?.id === activePlatform.id)
+      : activeCat?.group
+        ? list.filter((r) => getSource(r.source).groups?.includes(activeCat.group!))
+        : list;
 
   const [sort, setSort] = useState<Sort>("none");
   const [hideDead, setHideDead] = useState(false);
   const [textFilter, setTextFilter] = useState("");
-  const [platformId, setPlatformId] = useState<string | null>(null);
-  // `platforms` is what the other filters leave, so `v` only offers services
-  // that would show something; a choice that has since emptied counts as none.
-  const { results, platforms, platform } = useMemo(() => {
-    const cat = CATEGORIES.find((c) => c.key === section);
-    const base = cat?.group
-      ? search.results.filter((r) => getSource(r.source).groups?.includes(cat.group!))
-      : search.results;
-    const filtered = filterResults(base, hideDead, textFilter);
-    const available = platformsIn(filtered);
-    const chosen = available.find((p) => p.id === platformId) ?? null;
-    const shown = chosen
-      ? filtered.filter((r) => detectPlatform(r.name)?.id === chosen.id)
-      : filtered;
-    return { results: sortResults(shown, sort), platforms: available, platform: chosen };
-  }, [search.results, section, sort, hideDead, textFilter, platformId]);
+  const results = useMemo(
+    () => sortResults(filterResults(inTab(search.results), hideDead, textFilter), sort),
+    // inTab reads activeCat/activePlatform, which follow section.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [search.results, section, sort, hideDead, textFilter],
+  );
 
   const focused = region === "content";
   const [mode, setMode] = useState<Mode>("list");
@@ -286,10 +300,7 @@ export function Results() {
         setSort((cur) => nextSort(cur));
       } else if (input === "z") {
         setHideDead((on) => !on);
-      } else if (input === "v") {
-        // All platforms, then each one present, then back to all.
-        const at = platform ? platforms.findIndex((p) => p.id === platform.id) : -1;
-        setPlatformId(platforms[at + 1]?.id ?? null);
+
       } else if (input === "f") {
         setMode("filter");
       } else if (results.length === 0) {
@@ -364,10 +375,11 @@ export function Results() {
     () => Object.values(search.perSource).filter((s) => s.error).length,
     [search.perSource],
   );
-  const activeCat = CATEGORIES.find((c) => c.key === section);
-  const tabSources = activeCat?.group
-    ? SOURCES.filter((s) => s.groups?.includes(activeCat.group!))
-    : SOURCES;
+  const tabSources = activePlatform
+    ? VIDEO_SOURCES
+    : activeCat?.group
+      ? SOURCES.filter((s) => s.groups?.includes(activeCat.group!))
+      : SOURCES;
   const tabErrored =
     tabSources.length > 0 && tabSources.every((s) => search.perSource[s.id]?.error);
   // Only the active tab's sources hold its spinner; other groups' stragglers
@@ -387,11 +399,11 @@ export function Results() {
   };
 
   const sortNote = sort === "none" ? "" : `  ${ICON.dot} sort: ${sortLabel(sort)}`;
-  const filterNote =
-    (hideDead ? `  ${ICON.dot} alive only` : "") +
-    (platform ? `  ${ICON.dot} platform: ${platform.label}` : "");
+  const filterNote = hideDead ? `  ${ICON.dot} alive only` : "";
   const head = browsing
-    ? "newest across all sources"
+    ? activePlatform
+      ? `latest on ${activePlatform.label}`
+      : "newest across all sources"
     : `${results.length} result${results.length === 1 ? "" : "s"}`;
 
   const status = () => {
@@ -426,10 +438,7 @@ export function Results() {
         );
       }
       if (hideDead) {
-        const cat = CATEGORIES.find((c) => c.key === section);
-        const base = cat?.group
-          ? search.results.filter((r) => getSource(r.source).groups?.includes(cat.group!))
-          : search.results;
+        const base = inTab(search.results);
         if (base.length > 0 && base.every((r) => r.seeders <= 0)) {
           return (
             <Text dimColor>
@@ -438,6 +447,14 @@ export function Results() {
           );
         }
       }
+      if (activePlatform)
+        return (
+          <Text dimColor>
+            {browsing
+              ? `Nothing on ${activePlatform.label} right now. Try a search.`
+              : `No ${activePlatform.label} releases for "${truncate(query, 28)}".`}
+          </Text>
+        );
       if (search.results.length > 0 && activeCat?.group)
         return <Text dimColor>{`No ${activeCat.label.toLowerCase()} results yet. Try another tab or a search.`}</Text>;
       return (

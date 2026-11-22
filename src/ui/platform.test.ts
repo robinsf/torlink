@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { detectPlatform, platformsIn, platformSearchText } from "./platform";
+import { detectPlatform, PLATFORMS, PLATFORM_TABS, platformQuery, platformSearchText } from "./platform";
 import type { TorrentResult } from "../sources/types";
 
 const r = (name: string): TorrentResult => ({
@@ -46,9 +46,33 @@ describe("platformSearchText", () => {
   });
 });
 
-describe("platformsIn", () => {
-  it("lists each platform present once, in the fixed platform order", () => {
-    const list = [r("A S01 AMZN"), r("B S01 NF"), r("C S01 NF"), r("D S01 BluRay")];
-    expect(platformsIn(list).map((p) => p.label)).toEqual(["Netflix", "Prime Video"]);
+describe("platform tabs", () => {
+  it("gives the major services a tab and a search term", () => {
+    expect(PLATFORM_TABS.map((p) => p.label)).toEqual([
+      "Netflix",
+      "Prime Video",
+      "Apple TV+",
+      "Disney+",
+      "Max",
+      "Hulu",
+      "Peacock",
+      "Paramount+",
+    ]);
+    for (const p of PLATFORM_TABS) expect(detectPlatform(`Show S01 1080p ${p.tags[0]} WEB-DL`)).toBe(p);
+  });
+
+  it("leaves the smaller services without a tab", () => {
+    expect(PLATFORMS.filter((p) => !p.term).map((p) => p.label)).toEqual([
+      "Crunchyroll",
+      "Showtime",
+      "Starz",
+      "Stan",
+    ]);
+  });
+
+  it("narrows a tab's search by what the user typed", () => {
+    const apple = PLATFORM_TABS.find((p) => p.id === "appletv")!;
+    expect(platformQuery(apple, "")).toBe("ATVP");
+    expect(platformQuery(apple, "  severance ")).toBe("severance ATVP");
   });
 });

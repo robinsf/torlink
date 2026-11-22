@@ -65,7 +65,7 @@ torlink also runs without the TUI, for servers and seedboxes:
 
 Add `--daemon` to keep seed, watch, serve, or files running after you log out; `torlnk --help` has the full list of modes and flags.
 
-Streaming releases carry their service in the name (NF, AMZN, ATVP, DSNP, PMTP…), and torlink reads it: press `v` in the results to show only one platform (Netflix, Prime Video, Apple TV+, Disney+, Max, Hulu, Peacock, Paramount+ and a few more), and `s` can sort by platform. Typing a platform's name into the filter (`f`) works too. A release that names no platform simply isn't tagged.
+Streaming releases carry their service in the name (NF, AMZN, ATVP, DSNP, PMTP…), and torlink reads it. The sidebar has a tab for each major platform (Netflix, Prime Video, Apple TV+, Disney+, Max, Hulu, Peacock, Paramount+) that lists the latest releases from that service; search inside a tab to narrow it ("severance" on Apple TV+). `s` can also sort any list by platform, and typing a platform's name into the filter (`f`) works too. A release that names no platform simply isn't tagged.
 
 Opening a movie or show in the results shows a short description of it (and of the episode, when the release names one), credited to TVmaze or Wikipedia.
 

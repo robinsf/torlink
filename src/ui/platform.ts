@@ -11,17 +11,20 @@ export interface Platform {
   words: readonly string[];
   // Extra names the list filter answers to, so "amazon" finds Prime Video.
   aliases?: string;
+  // What a platform's sidebar tab searches for. Only the major services have
+  // a tab, so only they carry one.
+  term?: string;
 }
 
 export const PLATFORMS: readonly Platform[] = [
-  { id: "netflix", label: "Netflix", tags: ["NF"], words: ["netflix"] },
-  { id: "prime", label: "Prime Video", tags: ["AMZN"], words: ["amazon"], aliases: "amazon prime" },
-  { id: "appletv", label: "Apple TV+", tags: ["ATVP"], words: [], aliases: "apple tv appletv" },
-  { id: "disney", label: "Disney+", tags: ["DSNP"], words: ["disney"], aliases: "disney plus" },
-  { id: "max", label: "Max", tags: ["HMAX", "MAX"], words: [], aliases: "hbo" },
-  { id: "hulu", label: "Hulu", tags: ["HULU"], words: ["hulu"] },
-  { id: "peacock", label: "Peacock", tags: ["PCOK"], words: ["peacock"] },
-  { id: "paramount", label: "Paramount+", tags: ["PMTP"], words: ["paramount"], aliases: "paramount plus" },
+  { id: "netflix", label: "Netflix", tags: ["NF"], term: "NF WEB-DL", words: ["netflix"] },
+  { id: "prime", label: "Prime Video", tags: ["AMZN"], term: "AMZN WEB-DL", words: ["amazon"], aliases: "amazon prime" },
+  { id: "appletv", label: "Apple TV+", tags: ["ATVP"], term: "ATVP", words: [], aliases: "apple tv appletv" },
+  { id: "disney", label: "Disney+", tags: ["DSNP"], term: "DSNP", words: ["disney"], aliases: "disney plus" },
+  { id: "max", label: "Max", tags: ["HMAX", "MAX"], term: "HMAX", words: [], aliases: "hbo" },
+  { id: "hulu", label: "Hulu", tags: ["HULU"], term: "HULU", words: ["hulu"] },
+  { id: "peacock", label: "Peacock", tags: ["PCOK"], term: "PCOK", words: ["peacock"] },
+  { id: "paramount", label: "Paramount+", tags: ["PMTP"], term: "PMTP", words: ["paramount"], aliases: "paramount plus" },
   { id: "crunchyroll", label: "Crunchyroll", tags: ["CR"], words: ["crunchyroll"] },
   { id: "showtime", label: "Showtime", tags: ["SHO"], words: ["showtime"] },
   { id: "starz", label: "Starz", tags: ["STZ"], words: ["starz"] },
@@ -49,13 +52,11 @@ export function platformSearchText(r: TorrentResult): string {
   return p ? `${p.label} ${p.aliases ?? ""}`.toLowerCase() : "";
 }
 
-// The platforms present in a list, in the order PLATFORMS gives, for the `v`
-// key to step through.
-export function platformsIn(list: TorrentResult[]): Platform[] {
-  const seen = new Set<string>();
-  for (const r of list) {
-    const p = detectPlatform(r.name);
-    if (p) seen.add(p.id);
-  }
-  return PLATFORMS.filter((p) => seen.has(p.id));
+// The platforms that get a sidebar tab.
+export const PLATFORM_TABS: readonly Platform[] = PLATFORMS.filter((p) => p.term);
+
+// What a platform tab searches for: its tag, narrowed by whatever the user
+// typed, so "severance" on Apple TV+ asks for "severance ATVP".
+export function platformQuery(p: Platform, query: string): string {
+  return `${query.trim()} ${p.term ?? ""}`.trim();
 }

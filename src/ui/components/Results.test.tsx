@@ -12,10 +12,13 @@ import { Results } from "./Results";
 import type { ConcurrentSearchState } from "../hooks/useConcurrentSearch";
 import type { TorrentResult } from "../../sources/types";
 
-const searchState = vi.hoisted(() => ({ current: null as unknown }));
+const searchState = vi.hoisted(() => ({ current: null as unknown, calls: [] as unknown[][] }));
 
 vi.mock("../hooks/useConcurrentSearch", () => ({
-  useConcurrentSearch: () => searchState.current,
+  useConcurrentSearch: (...args: unknown[]) => {
+    searchState.calls.push(args);
+    return searchState.current;
+  },
 }));
 
 // The details pane would otherwise look the open result up on TVmaze/Wikipedia.
@@ -325,5 +328,45 @@ describe("Results multi-select", () => {
     u.press("D");
     await vi.waitFor(() => expect(requestDownloadTo).toHaveBeenCalledTimes(1));
     expect(requestDownloadTo.mock.calls[0]![0].map((r: { id: string }) => r.id)).toEqual(["a1"]);
+  });
+});
+
+describe("Results platform tabs", () => {
+  const MIXED = [
+    t("n1", "Show S01E01 1080p NF WEB-DL"),
+    t("a1", "Show S01E01 2160p ATVP WEB-DL"),
+    t("n2", "Other S02E03 720p NF WEB-DL"),
+    t("p1", "Show S01E01 1080p BluRay"),
+  ];
+
+  it("shows only the releases that name the platform, and searches for its tag", async () => {
+    searchState.calls.length = 0;
+    searchState.current = settled(MIXED);
+    ui = renderUI(
+      <StoreContext.Provider value={makeTestStore({ query: "", section: "platform-netflix" })}>
+        <Results />
+      </StoreContext.Provider>,
+    );
+    const u = ui;
+    await vi.waitFor(() => expect(u.frame()).toContain("Latest (2)"));
+    expect(u.frame()).toContain("Show S01E01 1080p NF");
+    expect(u.frame()).toContain("Other S02E03 720p NF");
+    expect(u.frame()).not.toContain("ATVP");
+    expect(u.frame()).not.toContain("BluRay");
+    expect(u.frame()).toContain("latest on Netflix");
+    expect(searchState.calls.at(-1)?.[0]).toBe("NF WEB-DL");
+  });
+
+  it("narrows the platform search by the typed query", async () => {
+    searchState.calls.length = 0;
+    searchState.current = settled(MIXED);
+    ui = renderUI(
+      <StoreContext.Provider value={makeTestStore({ query: "severance", section: "platform-appletv" })}>
+        <Results />
+      </StoreContext.Provider>,
+    );
+    const u = ui;
+    await vi.waitFor(() => expect(u.frame()).toContain("Results (1)"));
+    expect(searchState.calls.at(-1)?.[0]).toBe("severance ATVP");
   });
 });
