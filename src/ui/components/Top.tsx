@@ -263,7 +263,7 @@ export function Top() {
             {tab("Shows", kind === "tv")}
             <Text dimColor>{"  /  "}</Text>
             {tab("Movies", kind === "movie")}
-            <Text dimColor>{`   ${ICON.dot}   ${year === undefined ? "popular now" : `from ${year}`}   ${ICON.dot}   [ ] platform  v shows/movies  y year`}</Text>
+            <Text dimColor>{`   ${ICON.dot}   ${year === undefined ? "popular now" : `${kind === "tv" ? "airing in" : "released in"} ${year}`}   ${ICON.dot}   [ ] platform  v shows/movies  y year`}</Text>
           </Box>
           <Box flexDirection="column" marginTop={1}>
             {top.loading ? (
@@ -271,7 +271,7 @@ export function Top() {
             ) : top.error ? (
               <Setup error={top.error} />
             ) : titles.length === 0 ? (
-              <Text dimColor>{`Nothing ${year === undefined ? "popular" : `from ${year}`} on ${platform.label} in your region.`}</Text>
+              <Text dimColor>{`Nothing ${year === undefined ? "popular" : `${kind === "tv" ? "airing in" : "released in"} ${year}`} on ${platform.label} in your region.`}</Text>
             ) : (
               visible.map((t, i) => {
                 const here = start + i === clamped && focused;

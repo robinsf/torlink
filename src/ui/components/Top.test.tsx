@@ -173,7 +173,7 @@ describe("Top picks", () => {
         u.press("y");
         await vi.waitFor(() => expect(hooks.topCalls.at(-1)).toEqual(["netflix", "tv", year]));
         expect(u.frame()).toContain(`Top picks · Netflix · ${year}`);
-        expect(u.frame()).toContain(`from ${year}`);
+        expect(u.frame()).toContain(`airing in ${year}`);
       }
       u.press("y");
       await vi.waitFor(() => expect(hooks.topCalls.at(-1)).toEqual(["netflix", "tv", undefined]));

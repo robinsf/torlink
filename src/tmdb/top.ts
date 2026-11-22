@@ -105,10 +105,17 @@ async function cached<T>(key: string, load: () => Promise<T>): Promise<T> {
   return value;
 }
 
+function yearParams(kind: TitleKind, year: number | undefined): Record<string, string> {
+  if (year === undefined) return {};
+  if (kind === "movie") return { primary_release_year: String(year) };
+  return { "air_date.gte": `${year}-01-01`, "air_date.lte": `${year}-12-31` };
+}
+
 // What is most popular on a platform, for shows or for films, among titles
 // streaming included with a subscription in the user's region. With a `year`,
-// only titles first aired or released that year; without, whatever is popular
-// right now.
+// a film is one released that year and a show is one with episodes airing that
+// year, so a returning show counts for every year it is on air, not only the
+// one it debuted in; without a year, whatever is popular right now.
 export async function topTitles(
   platformId: string,
   kind: TitleKind,
@@ -127,9 +134,7 @@ export async function topTitles(
         with_watch_monetization_types: "flatrate",
         sort_by: "popularity.desc",
         language: "en-US",
-        ...(year === undefined
-          ? {}
-          : { [kind === "tv" ? "first_air_date_year" : "primary_release_year"]: String(year) }),
+        ...yearParams(kind, year),
       },
       request,
     );
