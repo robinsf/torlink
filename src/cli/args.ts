@@ -225,6 +225,7 @@ TORLINK_NO_DESCRIPTIONS=1 to send nothing.
 top picks (TUI): the Top picks tab lists what is popular on each streaming
 platform, from TMDB. It needs TORLINK_TMDB_KEY (a free key from
 themoviedb.org); TORLINK_TMDB_REGION=GB picks another country (default US).
+A title's details show its poster as colour blocks; TORLINK_NO_POSTERS=1 skips them.
 
 speed limits (all modes): set TORLINK_DOWNLOAD_LIMIT and/or TORLINK_UPLOAD_LIMIT
 to cap the whole client, in bytes per second with an optional k/m/g suffix

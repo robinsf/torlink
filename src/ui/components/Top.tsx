@@ -1,17 +1,46 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Box, Text, useInput } from "ink";
 import { useStore } from "../store";
 import { Panel } from "./Panel";
 import { Rule } from "./Rule";
 import { Spinner } from "./Spinner";
-import { useEpisodes, useTitleDetails, useTopTitles } from "../hooks/useTop";
+import { useEpisodes, usePoster, useTitleDetails, useTopTitles } from "../hooks/useTop";
 import { wrapStep, windowStart } from "../move";
 import { COLOR, GUTTER, ICON } from "../theme";
 import { PLATFORM_TABS } from "../platform";
+import { posterCols, renderPoster, toRuns } from "../poster";
+import { postersEnabled } from "../../tmdb/poster";
 import { clipWords, truncate } from "../../util/format";
+import type { Pixels } from "../../tmdb/poster";
 import type { TitleKind, TopTitle } from "../../tmdb/top";
 
 const RATING_W = 6;
+
+// A poster needs this much height and leaves the text this much width.
+const POSTER_MIN_ROWS = 8;
+const POSTER_MAX_ROWS = 12;
+const POSTER_GAP = 2;
+const TEXT_MIN_W = 36;
+
+// The poster as half-block cells; an empty box of the same size while the
+// image is still loading, so the text does not jump when it lands.
+function Poster({ img, cols, rows }: { img: Pixels | null; cols: number; rows: number }) {
+  const cells = useMemo(() => (img ? renderPoster(img, cols, rows) : null), [img, cols, rows]);
+  if (!cells) return <Box width={cols} height={rows} flexShrink={0} />;
+  return (
+    <Box flexDirection="column" width={cols} flexShrink={0}>
+      {cells.map((row, y) => (
+        <Text key={y}>
+          {toRuns(row).map((run, i) => (
+            <Text key={i} color={run.top} backgroundColor={run.bottom}>
+              {"▀".repeat(run.length)}
+            </Text>
+          ))}
+        </Text>
+      ))}
+    </Box>
+  );
+}
 
 function Setup({ error }: { error: string }) {
   if (error !== "nokey") return <Text color={COLOR.warn}>{error}</Text>;
@@ -55,63 +84,80 @@ function Detail({ title, platformLabel, width, rows }: { title: TopTitle; platfo
     d?.status,
   ].filter(Boolean);
 
+  // The poster sits to the left when the pane is tall and wide enough, and
+  // gives way (or never appears) otherwise.
+  const posterRows = Math.min(POSTER_MAX_ROWS, rows);
+  const cols = posterCols(posterRows);
+  const wantPoster =
+    !!title.poster && postersEnabled() && rows >= POSTER_MIN_ROWS && width - cols - POSTER_GAP >= TEXT_MIN_W;
+  const poster = usePoster(wantPoster ? title.poster : undefined);
+  const showPoster = wantPoster && poster !== "none";
+  const bodyW = showPoster ? width - cols - POSTER_GAP : width;
+
   // Rows: heading, rule, meta, genres, a blank, the overview, a blank and the
   // season heading, then as many episodes as are left. The overview takes what
   // its text needs, up to a third of the pane.
-  const textW = Math.max(10, width - 2);
+  const textW = Math.max(10, bodyW - 2);
   const overviewMax = Math.max(2, Math.min(4, Math.floor(rows / 3)));
   const overviewRows = Math.min(overviewMax, Math.max(1, Math.ceil(title.overview.length / (textW - 1))));
   const episodeRows = Math.max(0, rows - (7 + overviewRows));
   const list = episodes.value ?? [];
 
   return (
-    <Box flexDirection="column">
-      <Box>
-        <Box flexGrow={1} minWidth={0}>
-          <Text bold color={COLOR.text} wrap="truncate-end">{title.title}</Text>
-        </Box>
-        <Box flexShrink={0} marginLeft={2}>
-          <Text color={COLOR.accent} bold>{platformLabel}</Text>
-        </Box>
-      </Box>
-      <Rule width={width} />
-      <Text dimColor wrap="truncate-end">{meta.join(`  ${ICON.dot}  `)}</Text>
-      <Text dimColor wrap="truncate-end">{d && d.genres.length > 0 ? d.genres.join(", ") : " "}</Text>
-      <Box marginTop={1}>
-        <Text color={COLOR.text}>
-          {title.overview ? clipWords(title.overview, overviewMax * (textW - 1)) : "No description."}
-        </Text>
-      </Box>
-      {title.kind === "tv" && rows >= 8 + overviewRows ? (
-        <Box marginTop={1} flexDirection="column">
-          {details.loading || episodes.loading ? (
-            <Spinner label="Loading episodes…" />
-          ) : episodes.error && episodes.error !== "nokey" ? (
-            <Text color={COLOR.warn}>{episodes.error}</Text>
-          ) : shown === null ? null : (
-            <>
-              <Text dimColor bold>
-                {`Season ${shown}${seasons.length > 1 ? "   ([ ] to change)" : ""}`}
-              </Text>
-              {list.slice(0, episodeRows).map((e) => (
-                <Box key={e.number}>
-                  <Box width={4} flexShrink={0}>
-                    <Text dimColor>{String(e.number).padStart(2, "0")}</Text>
-                  </Box>
-                  <Box flexGrow={1} minWidth={0}>
-                    <Text color={COLOR.text} wrap="truncate-end">{e.name}</Text>
-                  </Box>
-                  {e.airDate ? (
-                    <Box flexShrink={0} marginLeft={1}>
-                      <Text dimColor>{e.airDate}</Text>
-                    </Box>
-                  ) : null}
-                </Box>
-              ))}
-            </>
-          )}
+    <Box>
+      {showPoster ? (
+        <Box marginRight={POSTER_GAP} flexShrink={0}>
+          <Poster img={poster} cols={cols} rows={posterRows} />
         </Box>
       ) : null}
+      <Box flexDirection="column" flexGrow={1} minWidth={0}>
+        <Box>
+          <Box flexGrow={1} minWidth={0}>
+            <Text bold color={COLOR.text} wrap="truncate-end">{title.title}</Text>
+          </Box>
+          <Box flexShrink={0} marginLeft={2}>
+            <Text color={COLOR.accent} bold>{platformLabel}</Text>
+          </Box>
+        </Box>
+        <Rule width={bodyW} />
+        <Text dimColor wrap="truncate-end">{meta.join(`  ${ICON.dot}  `)}</Text>
+        <Text dimColor wrap="truncate-end">{d && d.genres.length > 0 ? d.genres.join(", ") : " "}</Text>
+        <Box marginTop={1}>
+          <Text color={COLOR.text}>
+            {title.overview ? clipWords(title.overview, overviewMax * (textW - 1)) : "No description."}
+          </Text>
+        </Box>
+        {title.kind === "tv" && rows >= 8 + overviewRows ? (
+          <Box marginTop={1} flexDirection="column">
+            {details.loading || episodes.loading ? (
+              <Spinner label="Loading episodes…" />
+            ) : episodes.error && episodes.error !== "nokey" ? (
+              <Text color={COLOR.warn}>{episodes.error}</Text>
+            ) : shown === null ? null : (
+              <>
+                <Text dimColor bold>
+                  {`Season ${shown}${seasons.length > 1 ? "   ([ ] to change)" : ""}`}
+                </Text>
+                {list.slice(0, episodeRows).map((e) => (
+                  <Box key={e.number}>
+                    <Box width={4} flexShrink={0}>
+                      <Text dimColor>{String(e.number).padStart(2, "0")}</Text>
+                    </Box>
+                    <Box flexGrow={1} minWidth={0}>
+                      <Text color={COLOR.text} wrap="truncate-end">{e.name}</Text>
+                    </Box>
+                    {e.airDate ? (
+                      <Box flexShrink={0} marginLeft={1}>
+                        <Text dimColor>{e.airDate}</Text>
+                      </Box>
+                    ) : null}
+                  </Box>
+                ))}
+              </>
+            )}
+          </Box>
+        ) : null}
+      </Box>
     </Box>
   );
 }

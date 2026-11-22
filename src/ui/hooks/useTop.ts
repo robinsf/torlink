@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { tmdbKey } from "../../tmdb/client";
+import { fetchPoster, postersEnabled, type Pixels } from "../../tmdb/poster";
 import {
   seasonEpisodes,
   titleDetails,
@@ -67,4 +68,29 @@ export function useTitleDetails(title: TopTitle | null): Loaded<TitleDetails> {
 export function useEpisodes(title: TopTitle | null, season: number | null): Loaded<Episode[]> {
   const on = !!title && title.kind === "tv" && season !== null;
   return useLoad(on, (signal) => seasonEpisodes(title!.id, season!, { signal }), [title?.id, season]);
+}
+
+// The poster's pixels: null while it loads, "none" when there is no poster to
+// show (no path, posters off, or the fetch or decode failed), since a missing
+// poster is never an error.
+export function usePoster(path: string | undefined): Pixels | "none" | null {
+  const [pixels, setPixels] = useState<Pixels | "none" | null>(path && postersEnabled() ? null : "none");
+  useEffect(() => {
+    if (!path || !postersEnabled()) {
+      setPixels("none");
+      return;
+    }
+    setPixels(null);
+    const ctl = new AbortController();
+    fetchPoster(path, { signal: ctl.signal }).then(
+      (img) => {
+        if (!ctl.signal.aborted) setPixels(img ?? "none");
+      },
+      () => {
+        if (!ctl.signal.aborted) setPixels("none");
+      },
+    );
+    return () => ctl.abort();
+  }, [path]);
+  return pixels;
 }

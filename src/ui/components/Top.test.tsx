@@ -9,7 +9,9 @@ const hooks = vi.hoisted(() => ({
   top: null as unknown,
   details: null as unknown,
   episodes: null as unknown,
+  poster: "none" as unknown,
   topCalls: [] as unknown[][],
+  posterCalls: [] as unknown[],
 }));
 
 vi.mock("../hooks/useTop", () => ({
@@ -19,6 +21,10 @@ vi.mock("../hooks/useTop", () => ({
   },
   useTitleDetails: () => hooks.details,
   useEpisodes: () => hooks.episodes,
+  usePoster: (path: unknown) => {
+    hooks.posterCalls.push(path);
+    return hooks.poster;
+  },
 }));
 
 const loaded = <T,>(value: T | null, error: string | null = null): Loaded<T> => ({
@@ -28,7 +34,7 @@ const loaded = <T,>(value: T | null, error: string | null = null): Loaded<T> => 
 });
 
 const SHOWS: TopTitle[] = [
-  { id: 1, kind: "tv", title: "Severance", year: "2022", rating: 8.4, overview: "Mark works at Lumon Industries." },
+  { id: 1, kind: "tv", title: "Severance", year: "2022", rating: 8.4, overview: "Mark works at Lumon Industries.", poster: "/sev.jpg" },
   { id: 2, kind: "tv", title: "Slow Horses", year: "2022", rating: 8.1, overview: "Spies in exile." },
 ];
 const DETAILS: TitleDetails = {
@@ -49,6 +55,8 @@ let ui: RenderedUI | null = null;
 afterEach(() => {
   ui?.unmount();
   ui = null;
+  hooks.poster = "none";
+  hooks.posterCalls.length = 0;
 });
 
 function mount(store: Partial<Store> = {}): RenderedUI {
@@ -126,5 +134,31 @@ describe("Top picks", () => {
     u.press("s");
     await vi.waitFor(() => expect(submitQuery).toHaveBeenCalledWith("Slow Horses"));
     expect(setSection).toHaveBeenCalledWith("platform-netflix");
+  });
+
+  it("draws the poster beside the details as coloured half blocks", async () => {
+    hooks.top = loaded(SHOWS);
+    hooks.details = loaded(DETAILS);
+    hooks.episodes = loaded(EPISODES);
+    hooks.poster = { width: 4, height: 6, data: new Uint8Array(4 * 6 * 4).fill(200) };
+    const u = mount();
+    await vi.waitFor(() => expect(u.frame()).toContain("Severance (2022)"));
+    u.press("\r");
+    await vi.waitFor(() => expect(u.frame()).toContain("▀▀▀▀"));
+    expect(hooks.posterCalls.at(-1)).toBe("/sev.jpg");
+    // The text is still there, next to it.
+    expect(u.frame()).toContain("Mark works at Lumon");
+  });
+
+  it("makes room for the text again when there is no poster to show", async () => {
+    hooks.top = loaded(SHOWS);
+    hooks.details = loaded(DETAILS);
+    hooks.episodes = loaded(EPISODES);
+    hooks.poster = "none";
+    const u = mount();
+    await vi.waitFor(() => expect(u.frame()).toContain("Severance (2022)"));
+    u.press("\r");
+    await vi.waitFor(() => expect(u.frame()).toContain("Mark works at Lumon"));
+    expect(u.frame()).not.toContain("▀");
   });
 });

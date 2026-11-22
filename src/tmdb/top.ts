@@ -24,6 +24,8 @@ export interface TopTitle {
   // TMDB's 0-10 user score; undefined when nobody has voted.
   rating?: number;
   overview: string;
+  // TMDB poster path, e.g. "/abc.jpg"; resolved by fetchPoster.
+  poster?: string;
 }
 
 export interface Season {
@@ -58,6 +60,7 @@ interface DiscoverRow {
   vote_average?: number;
   vote_count?: number;
   overview?: string;
+  poster_path?: string | null;
 }
 
 const MAX_TITLES = 20;
@@ -79,6 +82,7 @@ export function mapTopTitles(rows: DiscoverRow[], kind: TitleKind): TopTitle[] {
       year: date && /^\d{4}/.test(date) ? date.slice(0, 4) : undefined,
       rating: r.vote_count && r.vote_average ? Math.round(r.vote_average * 10) / 10 : undefined,
       overview: clean(r.overview),
+      poster: r.poster_path || undefined,
     });
   }
   return out.slice(0, MAX_TITLES);
