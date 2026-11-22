@@ -4,6 +4,9 @@ export interface Description {
   text: string;
   // Which service answered, so the UI can credit it.
   via: "TVmaze" | "Wikipedia";
+  // The service's own poster for the title, when it has one. Only ever a URL
+  // fetchPosterFrom will accept.
+  poster?: string;
 }
 
 export interface DescribeOptions {

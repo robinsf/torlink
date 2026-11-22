@@ -80,3 +80,55 @@ describe("fetchPoster", () => {
     expect(postersEnabled({ TORLINK_NO_POSTERS: "1" })).toBe(false);
   });
 });
+
+describe("isPosterUrl", () => {
+  it.each([
+    "https://image.tmdb.org/t/p/w342/abc.jpg",
+    "https://static.tvmaze.com/uploads/images/medium_portrait/528/1320416.jpg",
+    "https://upload.wikimedia.org/wikipedia/en/thumb/8/8e/Dune_%282021_film%29.jpg/330px-Dune_%282021_film%29.jpg",
+  ])("accepts %s", async (url) => {
+    const { isPosterUrl } = await import("./poster");
+    expect(isPosterUrl(url)).toBe(true);
+  });
+
+  it.each([
+    "http://static.tvmaze.com/uploads/images/medium_portrait/528/1.jpg",
+    "https://evil.example/x.jpg",
+    "https://static.tvmaze.com.evil.example/x.jpg",
+    "https://user:pw@static.tvmaze.com/x.jpg",
+    "https://static.tvmaze.com:8443/x.jpg",
+    "https://static.tvmaze.com/x.jpg?redirect=1",
+    "https://static.tvmaze.com/x.jpg#frag",
+    "https://static.tvmaze.com/x.svg",
+    "https://static.tvmaze.com/x.png",
+    "not a url",
+    "",
+  ])("refuses %j", async (url) => {
+    const { isPosterUrl } = await import("./poster");
+    expect(isPosterUrl(url)).toBe(false);
+  });
+});
+
+describe("fetchPosterFrom", () => {
+  it("fetches a vetted URL as is, refusing redirects, and decodes it", async () => {
+    const { fetchPosterFrom } = await import("./poster");
+    mockFetch.mockResolvedValueOnce(bytesReply(sampleJpeg()));
+    const img = await fetchPosterFrom({ url: "https://static.tvmaze.com/uploads/images/medium_portrait/1/2.jpg" });
+    expect(img).toMatchObject({ width: 16, height: 24 });
+    expect(String(mockFetch.mock.calls[0]![0])).toBe("https://static.tvmaze.com/uploads/images/medium_portrait/1/2.jpg");
+    expect((mockFetch.mock.calls[0]![1] as RequestInit).redirect).toBe("error");
+  });
+
+  it("makes no request for a URL off the allowed hosts", async () => {
+    const { fetchPosterFrom } = await import("./poster");
+    expect(await fetchPosterFrom({ url: "https://evil.example/x.jpg" })).toBeNull();
+    expect(mockFetch).not.toHaveBeenCalled();
+  });
+
+  it("fetches a TMDB source through the poster path check", async () => {
+    const { fetchPosterFrom } = await import("./poster");
+    mockFetch.mockResolvedValueOnce(bytesReply(sampleJpeg()));
+    expect(await fetchPosterFrom({ tmdb: "/ok.jpg" })).not.toBeNull();
+    expect(await fetchPosterFrom({ tmdb: "/../x.jpg" })).toBeNull();
+  });
+});

@@ -8,40 +8,13 @@ import { useEpisodes, usePoster, useTitleDetails, useTopTitles } from "../hooks/
 import { wrapStep, windowStart } from "../move";
 import { COLOR, GUTTER, ICON } from "../theme";
 import { PLATFORM_TABS } from "../platform";
-import { posterCols, renderPoster, toRuns } from "../poster";
+import { Poster, POSTER_GAP, posterBox } from "./Poster";
 import { postersEnabled } from "../../tmdb/poster";
 import { clipWords, truncate } from "../../util/format";
-import type { Pixels } from "../../tmdb/poster";
 import { recentYears, type TitleKind, type TopTitle } from "../../tmdb/top";
 
 const RATING_W = 6;
 const TAG_W = 4;
-
-// A poster needs this much height and leaves the text this much width.
-const POSTER_MIN_ROWS = 8;
-const POSTER_MAX_ROWS = 24;
-const POSTER_GAP = 2;
-const TEXT_MIN_W = 36;
-
-// The poster as half-block cells; an empty box of the same size while the
-// image is still loading, so the text does not jump when it lands.
-function Poster({ img, cols, rows }: { img: Pixels | null; cols: number; rows: number }) {
-  const cells = useMemo(() => (img ? renderPoster(img, cols, rows) : null), [img, cols, rows]);
-  if (!cells) return <Box width={cols} height={rows} flexShrink={0} />;
-  return (
-    <Box flexDirection="column" width={cols} flexShrink={0}>
-      {cells.map((row, y) => (
-        <Text key={y}>
-          {toRuns(row).map((run, i) => (
-            <Text key={i} color={run.top} backgroundColor={run.bottom}>
-              {"▀".repeat(run.length)}
-            </Text>
-          ))}
-        </Text>
-      ))}
-    </Box>
-  );
-}
 
 function Setup({ error }: { error: string }) {
   if (error !== "nokey") return <Text color={COLOR.warn}>{error}</Text>;
@@ -87,13 +60,11 @@ function Detail({ title, platformLabel, width, rows }: { title: TopTitle; platfo
 
   // The poster sits to the left when the pane is tall and wide enough, and
   // gives way (or never appears) otherwise.
-  const posterRows = Math.min(POSTER_MAX_ROWS, rows);
-  const cols = posterCols(posterRows);
-  const wantPoster =
-    !!title.poster && postersEnabled() && rows >= POSTER_MIN_ROWS && width - cols - POSTER_GAP >= TEXT_MIN_W;
+  const box = posterBox(rows, width);
+  const wantPoster = !!title.poster && postersEnabled() && box !== null;
   const poster = usePoster(wantPoster ? title.poster : undefined);
   const showPoster = wantPoster && poster !== "none";
-  const bodyW = showPoster ? width - cols - POSTER_GAP : width;
+  const bodyW = showPoster ? width - box!.cols - POSTER_GAP : width;
 
   // Rows: heading, rule, meta, genres, a blank, the overview, a blank and the
   // season heading, then as many episodes as are left. The overview takes what
@@ -108,7 +79,7 @@ function Detail({ title, platformLabel, width, rows }: { title: TopTitle; platfo
     <Box>
       {showPoster ? (
         <Box marginRight={POSTER_GAP} flexShrink={0}>
-          <Poster img={poster} cols={cols} rows={posterRows} />
+          <Poster img={poster} cols={box!.cols} rows={box!.rows} />
         </Box>
       ) : null}
       <Box flexDirection="column" flexGrow={1} minWidth={0}>

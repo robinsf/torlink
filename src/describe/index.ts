@@ -6,6 +6,7 @@ import { movieDescription } from "./wikipedia";
 import type { Description, DescribeOptions } from "./types";
 
 export type { Description } from "./types";
+export { canPoster, findPoster } from "./poster";
 
 type Kind = "tv" | "movie";
 

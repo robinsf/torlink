@@ -153,4 +153,30 @@ describe("describeResult", () => {
     mockFetch.mockResolvedValueOnce(reply({ ...SHOW, id: 1, name: "Severance" }));
     expect((await describeResult(result("Severance S01 1080p", "eztv")))?.heading).toContain("Severance");
   });
+
+  it("carries the service's own poster when it is on a vetted host, and drops one that is not", async () => {
+    const { describeResult } = await import("./index");
+    mockFetch.mockResolvedValueOnce(
+      reply({ ...SHOW, image: { medium: "https://static.tvmaze.com/uploads/images/medium_portrait/1/2.jpg" } }),
+    );
+    const show = await describeResult(result("Breaking Bad S01 1080p", "eztv"));
+    expect(show?.poster).toBe("https://static.tvmaze.com/uploads/images/medium_portrait/1/2.jpg");
+
+    mockFetch.mockResolvedValueOnce(reply({ ...SHOW, id: 2, name: "Other", image: { medium: "https://evil.example/p.jpg" } }));
+    expect((await describeResult(result("Other S01 1080p", "eztv")))?.poster).toBeUndefined();
+
+    mockFetch.mockResolvedValueOnce(
+      reply({ pages: [{ key: "Dune_(2021_film)", title: "Dune (2021 film)", description: "Film by Denis Villeneuve" }] }),
+    );
+    mockFetch.mockResolvedValueOnce(
+      reply({
+        title: "Dune (2021 film)",
+        extract: "Dune is a 2021 epic.",
+        thumbnail: { source: "https://upload.wikimedia.org/wikipedia/en/8/8e/Dune_%282021_film%29.jpg?utm_source=en.wikipedia.org&utm_campaign=api&utm_content=thumbnail_unscaled" },
+      }),
+    );
+    const film = await describeResult(result("Dune (2021) [1080p]", "yts"));
+    // The tracking parameters Wikipedia appends are dropped.
+    expect(film?.poster).toBe("https://upload.wikimedia.org/wikipedia/en/8/8e/Dune_%282021_film%29.jpg");
+  });
 });

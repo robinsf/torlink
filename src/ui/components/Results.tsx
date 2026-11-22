@@ -7,7 +7,10 @@ import { TextField } from "./TextField";
 import { Panel } from "./Panel";
 import { Rule } from "./Rule";
 import { useConcurrentSearch } from "../hooks/useConcurrentSearch";
-import { useDescription } from "../hooks/useDescription";
+import { useDescription, useResultPoster } from "../hooks/useDescription";
+import { Poster, POSTER_GAP, posterBox } from "./Poster";
+import { canPoster } from "../../describe";
+import { postersEnabled } from "../../tmdb/poster";
 import { getSource, SOURCES } from "../../sources/registry";
 import { stickCursor, wrapStep, windowStart, resultsPanelOuter } from "../move";
 import { sortResults, nextSort, sortLabel, sortArrow, type Sort, type SortField } from "../sort";
@@ -48,11 +51,18 @@ const DETAIL_FIXED_ROWS = 17;
 const ABOUT_MAX_ROWS = 5;
 const ABOUT_CHROME_ROWS = 2;
 
-function Detail({ r, width, aboutRows }: { r: TorrentResult; width: number; aboutRows: number }) {
+function Detail({ r, width, aboutRows, rows }: { r: TorrentResult; width: number; aboutRows: number; rows: number }) {
   const ss = sourceStyle(r.source);
   const via = detectPlatform(r.name);
   const about = useDescription(r);
-  const aboutWidth = Math.max(10, width - 10);
+  // A poster sits to the left when the result is one that has one and the pane
+  // has the room; it gives way to the text otherwise, or when none is found.
+  const box = posterBox(rows, width);
+  const wantPoster = box !== null && postersEnabled() && canPoster(r);
+  const poster = useResultPoster(wantPoster ? r : null, about);
+  const showPoster = wantPoster && poster !== "none";
+  const bodyW = showPoster ? width - box!.cols - POSTER_GAP : width;
+  const aboutWidth = Math.max(10, bodyW - 10);
   const date = formatRelative(r.added);
   const health =
     r.seeders || r.leechers ? (
@@ -66,91 +76,98 @@ function Detail({ r, width, aboutRows }: { r: TorrentResult; width: number; abou
       <Text dimColor>unknown</Text>
     );
   return (
-    <Box flexDirection="column">
-      <Box>
-        <Box flexGrow={1} minWidth={0}>
-          <Text bold color={COLOR.text} wrap="truncate-end">
-            {cleanText(r.name)}
-          </Text>
+    <Box>
+      {showPoster ? (
+        <Box marginRight={POSTER_GAP} flexShrink={0}>
+          <Poster img={poster} cols={box!.cols} rows={box!.rows} />
         </Box>
-        <Box flexShrink={0} marginLeft={2}>
-          <Text color={ss.color} bold>
-            {ss.tag}
-          </Text>
+      ) : null}
+      <Box flexDirection="column" flexGrow={1} minWidth={0}>
+        <Box>
+          <Box flexGrow={1} minWidth={0}>
+            <Text bold color={COLOR.text} wrap="truncate-end">
+              {cleanText(r.name)}
+            </Text>
+          </Box>
+          <Box flexShrink={0} marginLeft={2}>
+            <Text color={ss.color} bold>
+              {ss.tag}
+            </Text>
+          </Box>
         </Box>
-      </Box>
-      <Rule width={width} />
-      <Box marginTop={1} flexDirection="column">
-        <DetailRow
-          label="Size"
-          value={
-            r.sizeBytes > 0 ? (
-              <Text color={COLOR.text}>{formatBytes(r.sizeBytes)}</Text>
-            ) : (
-              <Text dimColor>unknown</Text>
-            )
-          }
-        />
-        <DetailRow label="Health" value={health} />
-        {r.numFiles ? (
-          <DetailRow label="Files" value={<Text dimColor>{String(r.numFiles)}</Text>} />
-        ) : null}
-        {date ? <DetailRow label="Added" value={<Text dimColor>{date}</Text>} /> : null}
-        {via ? <DetailRow label="Platform" value={<Text color={COLOR.text}>{via.label}</Text>} /> : null}
-        {aboutRows >= 1 && about.loading ? (
-          <DetailRow label="About" value={<Text dimColor>looking up…</Text>} />
-        ) : null}
-        {aboutRows > ABOUT_CHROME_ROWS && about.description ? (
+        <Rule width={bodyW} />
+        <Box marginTop={1} flexDirection="column">
           <DetailRow
-            label="About"
+            label="Size"
             value={
-              <Box flexDirection="column">
-                <Text color={COLOR.text} bold wrap="truncate-end">
-                  {about.description.heading}
-                </Text>
-                <Text dimColor>
-                  {clipWords(about.description.text, (aboutRows - ABOUT_CHROME_ROWS) * (aboutWidth - 1))}
-                </Text>
-                <Text color={COLOR.alt} dimColor>{`via ${about.description.via}`}</Text>
-              </Box>
+              r.sizeBytes > 0 ? (
+                <Text color={COLOR.text}>{formatBytes(r.sizeBytes)}</Text>
+              ) : (
+                <Text dimColor>unknown</Text>
+              )
             }
           />
-        ) : null}
-        <DetailRow
-          label="Hash"
-          value={
-            <Text color={COLOR.alt} dimColor wrap="truncate-end">
-              {stripControl(r.infoHash)}
-            </Text>
-          }
-        />
-        <DetailRow
-          label="Magnet"
-          value={
-            <Text color={COLOR.alt} dimColor wrap="truncate-end">
-              {stripControl(r.magnet)}
-            </Text>
-          }
-        />
-      </Box>
-      <Box marginTop={1}>
-        <Text color={COLOR.accent} bold>
-          d
-        </Text>
-        <Text color={COLOR.text}> Download</Text>
-        <Text dimColor>{`  ${ICON.dot}  `}</Text>
-        <Text color={COLOR.accent} bold>
-          y
-        </Text>
-        <Text color={COLOR.text}> Copy</Text>
-        <Text dimColor>{`  ${ICON.dot}  `}</Text>
-        <Text color={COLOR.accent} bold>
-          e
-        </Text>
-        <Text color={COLOR.text}> Export</Text>
-        <Text dimColor>{`  ${ICON.dot}  `}</Text>
-        <Text color={COLOR.alt}>esc</Text>
-        <Text dimColor> back</Text>
+          <DetailRow label="Health" value={health} />
+          {r.numFiles ? (
+            <DetailRow label="Files" value={<Text dimColor>{String(r.numFiles)}</Text>} />
+          ) : null}
+          {date ? <DetailRow label="Added" value={<Text dimColor>{date}</Text>} /> : null}
+          {via ? <DetailRow label="Platform" value={<Text color={COLOR.text}>{via.label}</Text>} /> : null}
+          {aboutRows >= 1 && about.loading ? (
+            <DetailRow label="About" value={<Text dimColor>looking up…</Text>} />
+          ) : null}
+          {aboutRows > ABOUT_CHROME_ROWS && about.description ? (
+            <DetailRow
+              label="About"
+              value={
+                <Box flexDirection="column">
+                  <Text color={COLOR.text} bold wrap="truncate-end">
+                    {about.description.heading}
+                  </Text>
+                  <Text dimColor>
+                    {clipWords(about.description.text, (aboutRows - ABOUT_CHROME_ROWS) * (aboutWidth - 1))}
+                  </Text>
+                  <Text color={COLOR.alt} dimColor>{`via ${about.description.via}`}</Text>
+                </Box>
+              }
+            />
+          ) : null}
+          <DetailRow
+            label="Hash"
+            value={
+              <Text color={COLOR.alt} dimColor wrap="truncate-end">
+                {stripControl(r.infoHash)}
+              </Text>
+            }
+          />
+          <DetailRow
+            label="Magnet"
+            value={
+              <Text color={COLOR.alt} dimColor wrap="truncate-end">
+                {stripControl(r.magnet)}
+              </Text>
+            }
+          />
+        </Box>
+        <Box marginTop={1}>
+          <Text color={COLOR.accent} bold>
+            d
+          </Text>
+          <Text color={COLOR.text}> Download</Text>
+          <Text dimColor>{`  ${ICON.dot}  `}</Text>
+          <Text color={COLOR.accent} bold>
+            y
+          </Text>
+          <Text color={COLOR.text}> Copy</Text>
+          <Text dimColor>{`  ${ICON.dot}  `}</Text>
+          <Text color={COLOR.accent} bold>
+            e
+          </Text>
+          <Text color={COLOR.text}> Export</Text>
+          <Text dimColor>{`  ${ICON.dot}  `}</Text>
+          <Text color={COLOR.alt}>esc</Text>
+          <Text dimColor> back</Text>
+        </Box>
       </Box>
     </Box>
   );
@@ -505,6 +522,7 @@ export function Results() {
               r={detail}
               width={Math.max(10, contentWidth - 4)}
               aboutRows={Math.min(ABOUT_MAX_ROWS, Math.max(0, panelOuter - DETAIL_FIXED_ROWS))}
+              rows={Math.max(1, panelOuter - 2)}
             />
           ) : (
             <>

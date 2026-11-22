@@ -1,4 +1,5 @@
 import { fetchResilient, HttpError, USER_AGENT } from "../util/net";
+import { isPosterUrl } from "../tmdb/poster";
 import { htmlToText } from "./text";
 import type { ReleaseInfo } from "./parse";
 import type { Description, DescribeOptions } from "./types";
@@ -7,6 +8,7 @@ const API = "https://api.tvmaze.com";
 
 interface TvmazeShow {
   id?: number;
+  image?: { medium?: string | null } | null;
   name?: string;
   premiered?: string | null;
   summary?: string | null;
@@ -45,6 +47,8 @@ export async function tvDescription(
     opts,
   );
   if (!show?.name) return null;
+  const image = show.image?.medium;
+  const poster = image && isPosterUrl(image) ? image : undefined;
 
   if (show.id !== undefined && info.season !== undefined && info.episode !== undefined) {
     const ep = await getJson<TvmazeEpisode>(
@@ -58,6 +62,7 @@ export async function tvDescription(
         heading: `${htmlToText(show.name)} · ${code(info.season, info.episode)}${title}`,
         text,
         via: "TVmaze",
+        poster,
       };
     }
   }
@@ -71,5 +76,6 @@ export async function tvDescription(
     heading: `${htmlToText(show.name)}${year ? ` (${year})` : ""}${season}${genres}`,
     text,
     via: "TVmaze",
+    poster,
   };
 }

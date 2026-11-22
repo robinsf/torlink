@@ -22,8 +22,11 @@ vi.mock("../hooks/useConcurrentSearch", () => ({
 }));
 
 // The details pane would otherwise look the open result up on TVmaze/Wikipedia.
+const poster = vi.hoisted(() => ({ current: "none" as unknown }));
+
 vi.mock("../hooks/useDescription", () => ({
   useDescription: () => ({ loading: false, description: null }),
+  useResultPoster: () => poster.current,
 }));
 
 const t = (infoHash: string, name: string): TorrentResult => ({
@@ -368,5 +371,36 @@ describe("Results platform tabs", () => {
     const u = ui;
     await vi.waitFor(() => expect(u.frame()).toContain("Results (1)"));
     expect(searchState.calls.at(-1)?.[0]).toBe("severance ATVP");
+  });
+});
+
+describe("Results details poster", () => {
+  afterEach(() => {
+    poster.current = "none";
+  });
+
+  it("draws the poster beside the details, and the text is still there", async () => {
+    poster.current = { width: 4, height: 6, data: new Uint8Array(4 * 6 * 4).fill(180) };
+    const u = await mount(LIST, { listRows: 30 });
+    u.press(KEY.enter);
+    await vi.waitFor(() => expect(u.frame()).toContain("▀▀▀▀"));
+    expect(u.frame()).toContain("Seeders".toLowerCase());
+    expect(u.frame()).toContain("ubuntu 24.04 desktop amd64 iso");
+  });
+
+  it("gives the room back when there is no poster", async () => {
+    poster.current = "none";
+    const u = await mount(LIST, { listRows: 30 });
+    u.press(KEY.enter);
+    await vi.waitFor(() => expect(u.frame()).toContain("Health"));
+    expect(u.frame()).not.toContain("▀");
+  });
+
+  it("holds a blank spot while the poster loads, without drawing anything", async () => {
+    poster.current = null;
+    const u = await mount(LIST, { listRows: 30 });
+    u.press(KEY.enter);
+    await vi.waitFor(() => expect(u.frame()).toContain("Health"));
+    expect(u.frame()).not.toContain("▀");
   });
 });

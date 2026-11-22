@@ -1,4 +1,5 @@
 import { fetchResilient, HttpError, USER_AGENT } from "../util/net";
+import { isPosterUrl } from "../tmdb/poster";
 import { htmlToText } from "./text";
 import type { ReleaseInfo } from "./parse";
 import type { Description, DescribeOptions } from "./types";
@@ -13,6 +14,7 @@ interface WikiPage {
 }
 
 interface WikiSummary {
+  thumbnail?: { source?: string } | null;
   title?: string;
   description?: string | null;
   extract?: string;
@@ -27,6 +29,21 @@ async function getJson<T>(url: string, opts: DescribeOptions): Promise<T | null>
   if (res.status === 404) return null;
   if (!res.ok) throw new HttpError(res.status, `Wikipedia returned ${res.status}`);
   return (await res.json()) as T;
+}
+
+// Wikipedia's thumbnail URLs end in tracking parameters (?utm_source=...) that
+// the image does not need and the poster URL check does not allow, so they are
+// dropped before it.
+function posterOf(raw: string | undefined): string | undefined {
+  if (!raw) return undefined;
+  try {
+    const u = new URL(raw);
+    u.search = "";
+    u.hash = "";
+    return isPosterUrl(u.href) ? u.href : undefined;
+  } catch {
+    return undefined;
+  }
 }
 
 const bare = (s: string): string => s.toLowerCase().replace(/\([^)]*\)/g, "").replace(/[^a-z0-9]/g, "");
@@ -61,5 +78,10 @@ export async function movieDescription(
   if (!text) return null;
   const title = htmlToText((summary?.title ?? page.title ?? "").replace(/\s*\([^)]*\)$/, ""));
   const about = summary?.description ? ` · ${htmlToText(summary.description)}` : "";
-  return { heading: `${title}${about}`, text, via: "Wikipedia" };
+  return {
+    heading: `${title}${about}`,
+    text,
+    via: "Wikipedia",
+    poster: posterOf(summary?.thumbnail?.source),
+  };
 }

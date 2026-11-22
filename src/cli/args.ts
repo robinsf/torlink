@@ -219,8 +219,9 @@ to disable creation; existing playlists remain on disk.
 
 descriptions (TUI): opening a movie or show's details looks up a short
 description of it, and of the episode when the release names one, on TVmaze
-(shows) or Wikipedia (films), sending just the cleaned-up title. Set
-TORLINK_NO_DESCRIPTIONS=1 to send nothing.
+(shows) or Wikipedia (films), sending just the cleaned-up title. The details also show a poster
+(TMDB's with a key, else TVmaze's or Wikipedia's); TORLINK_NO_POSTERS=1 skips the
+images. Set TORLINK_NO_DESCRIPTIONS=1 to send nothing.
 
 top picks (TUI): the Top picks tab lists what is popular on each streaming
 platform, from TMDB. It needs TORLINK_TMDB_KEY (a free key from
