@@ -32,6 +32,7 @@ export const HELP_GROUPS: HelpGroup[] = [
       { keys: "d", label: "Download (shift+d: folder)" },
       { keys: "s", label: "Sort results" },
       { keys: "z", label: "Hide dead torrents" },
+      { keys: "v", label: "Filter by platform" },
       { keys: "y", label: "Copy magnet" },
       { keys: "↵", label: "Open details" },
       { keys: "e", label: "Export as .torrent" },

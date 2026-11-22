@@ -12,6 +12,7 @@ import { getSource, SOURCES } from "../../sources/registry";
 import { stickCursor, wrapStep, windowStart, resultsPanelOuter } from "../move";
 import { sortResults, nextSort, sortLabel, sortArrow, type Sort, type SortField } from "../sort";
 import { filterResults } from "../filter";
+import { detectPlatform, platformsIn } from "../platform";
 import { COLOR, GUTTER, ICON, sourceStyle } from "../theme";
 import { cleanText, clipWords, formatBytes, formatCount, formatRelative, stripControl, truncate } from "../../util/format";
 import type { Source, TorrentResult } from "../../sources/types";
@@ -37,12 +38,13 @@ function DetailRow({ label, value }: { label: string; value: ReactNode }) {
 
 // Rows the About block may take (a heading, the blurb, a "via" credit), out of
 // what the panel has left once the fixed detail rows are placed.
-const DETAIL_FIXED_ROWS = 16;
+const DETAIL_FIXED_ROWS = 17;
 const ABOUT_MAX_ROWS = 5;
 const ABOUT_CHROME_ROWS = 2;
 
 function Detail({ r, width, aboutRows }: { r: TorrentResult; width: number; aboutRows: number }) {
   const ss = sourceStyle(r.source);
+  const via = detectPlatform(r.name);
   const about = useDescription(r);
   const aboutWidth = Math.max(10, width - 10);
   const date = formatRelative(r.added);
@@ -88,6 +90,7 @@ function Detail({ r, width, aboutRows }: { r: TorrentResult; width: number; abou
           <DetailRow label="Files" value={<Text dimColor>{String(r.numFiles)}</Text>} />
         ) : null}
         {date ? <DetailRow label="Added" value={<Text dimColor>{date}</Text>} /> : null}
+        {via ? <DetailRow label="Platform" value={<Text color={COLOR.text}>{via.label}</Text>} /> : null}
         {aboutRows >= 1 && about.loading ? (
           <DetailRow label="About" value={<Text dimColor>looking up…</Text>} />
         ) : null}
@@ -169,13 +172,22 @@ export function Results() {
   const [sort, setSort] = useState<Sort>("none");
   const [hideDead, setHideDead] = useState(false);
   const [textFilter, setTextFilter] = useState("");
-  const results = useMemo(() => {
+  const [platformId, setPlatformId] = useState<string | null>(null);
+  // `platforms` is what the other filters leave, so `v` only offers services
+  // that would show something; a choice that has since emptied counts as none.
+  const { results, platforms, platform } = useMemo(() => {
     const cat = CATEGORIES.find((c) => c.key === section);
     const base = cat?.group
       ? search.results.filter((r) => getSource(r.source).groups?.includes(cat.group!))
       : search.results;
-    return sortResults(filterResults(base, hideDead, textFilter), sort);
-  }, [search.results, section, sort, hideDead, textFilter]);
+    const filtered = filterResults(base, hideDead, textFilter);
+    const available = platformsIn(filtered);
+    const chosen = available.find((p) => p.id === platformId) ?? null;
+    const shown = chosen
+      ? filtered.filter((r) => detectPlatform(r.name)?.id === chosen.id)
+      : filtered;
+    return { results: sortResults(shown, sort), platforms: available, platform: chosen };
+  }, [search.results, section, sort, hideDead, textFilter, platformId]);
 
   const focused = region === "content";
   const [mode, setMode] = useState<Mode>("list");
@@ -274,6 +286,10 @@ export function Results() {
         setSort((cur) => nextSort(cur));
       } else if (input === "z") {
         setHideDead((on) => !on);
+      } else if (input === "v") {
+        // All platforms, then each one present, then back to all.
+        const at = platform ? platforms.findIndex((p) => p.id === platform.id) : -1;
+        setPlatformId(platforms[at + 1]?.id ?? null);
       } else if (input === "f") {
         setMode("filter");
       } else if (results.length === 0) {
@@ -371,7 +387,9 @@ export function Results() {
   };
 
   const sortNote = sort === "none" ? "" : `  ${ICON.dot} sort: ${sortLabel(sort)}`;
-  const filterNote = hideDead ? `  ${ICON.dot} alive only` : "";
+  const filterNote =
+    (hideDead ? `  ${ICON.dot} alive only` : "") +
+    (platform ? `  ${ICON.dot} platform: ${platform.label}` : "");
   const head = browsing
     ? "newest across all sources"
     : `${results.length} result${results.length === 1 ? "" : "s"}`;

@@ -1,6 +1,7 @@
 import type { TorrentResult } from "../sources/types";
+import { detectPlatform } from "./platform";
 
-export type SortField = "size" | "seeders" | "source" | "added";
+export type SortField = "size" | "seeders" | "source" | "platform" | "added";
 export type SortDir = "asc" | "desc";
 export interface SortState {
   field: SortField;
@@ -22,6 +23,8 @@ export const SORT_CYCLE: Sort[] = [
   { field: "seeders", dir: "desc" },
   { field: "source", dir: "asc" },
   { field: "source", dir: "desc" },
+  { field: "platform", dir: "asc" },
+  { field: "platform", dir: "desc" },
   { field: "added", dir: "asc" },
   { field: "added", dir: "desc" },
 ];
@@ -68,6 +71,16 @@ export function sortResults(list: TorrentResult[], sort: Sort): TorrentResult[] 
       break;
     case "source":
       arr.sort((a, b) => mul * a.source.localeCompare(b.source) || b.seeders - a.seeders);
+      break;
+    case "platform":
+      // Releases that name no platform go last in either direction, so the
+      // ones that do are always on top.
+      arr.sort((a, b) => {
+        const pa = detectPlatform(a.name)?.label;
+        const pb = detectPlatform(b.name)?.label;
+        if (!pa || !pb) return pa ? -1 : pb ? 1 : b.seeders - a.seeders;
+        return mul * pa.localeCompare(pb) || b.seeders - a.seeders;
+      });
       break;
     case "added":
       arr.sort(

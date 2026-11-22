@@ -65,6 +65,8 @@ torlink also runs without the TUI, for servers and seedboxes:
 
 Add `--daemon` to keep seed, watch, serve, or files running after you log out; `torlnk --help` has the full list of modes and flags.
 
+Streaming releases carry their service in the name (NF, AMZN, ATVP, DSNP, PMTP…), and torlink reads it: press `v` in the results to show only one platform (Netflix, Prime Video, Apple TV+, Disney+, Max, Hulu, Peacock, Paramount+ and a few more), and `s` can sort by platform. Typing a platform's name into the filter (`f`) works too. A release that names no platform simply isn't tagged.
+
 Opening a movie or show in the results shows a short description of it (and of the episode, when the release names one), credited to TVmaze or Wikipedia.
 
 To cap bandwidth, set `TORLINK_DOWNLOAD_LIMIT` and/or `TORLINK_UPLOAD_LIMIT` (bytes per second, with an optional `k`/`m`/`g` suffix), for example `TORLINK_UPLOAD_LIMIT=500k torlnk`.

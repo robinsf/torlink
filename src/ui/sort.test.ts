@@ -18,10 +18,10 @@ function r(p: Partial<TorrentResult> & { infoHash: string }): TorrentResult {
 const ids = (list: TorrentResult[]): string[] => list.map((x) => x.infoHash);
 
 describe("nextSort", () => {
-  it("cycles through 9 states: none -> size asc/desc -> seeders asc/desc -> source asc/desc -> added asc/desc -> none", () => {
+  it("cycles through 11 states: none -> size asc/desc -> seeders asc/desc -> source asc/desc -> platform asc/desc -> added asc/desc -> none", () => {
     const seq: Sort[] = [];
     let s: Sort = "none";
-    for (let i = 0; i < 9; i++) {
+    for (let i = 0; i < 11; i++) {
       s = nextSort(s);
       seq.push(s);
     }
@@ -32,14 +32,16 @@ describe("nextSort", () => {
       { field: "seeders", dir: "desc" },
       { field: "source", dir: "asc" },
       { field: "source", dir: "desc" },
+      { field: "platform", dir: "asc" },
+      { field: "platform", dir: "desc" },
       { field: "added", dir: "asc" },
       { field: "added", dir: "desc" },
       "none",
     ]);
   });
 
-  it("SORT_CYCLE has exactly 9 states starting with none", () => {
-    expect(SORT_CYCLE).toHaveLength(9);
+  it("SORT_CYCLE has exactly 11 states starting with none", () => {
+    expect(SORT_CYCLE).toHaveLength(11);
     expect(SORT_CYCLE[0]).toBe("none");
   });
 });
@@ -172,5 +174,32 @@ describe("defaultOrder", () => {
       r({ infoHash: "dated", seeders: 5, added: 1 }),
     ]);
     expect(ids(ordered)).toEqual(["dated", "undated"]);
+  });
+});
+
+describe("sortResults by platform", () => {
+  const list = [
+    r({ infoHash: "plain", name: "Show S01 1080p BluRay", seeders: 99 }),
+    r({ infoHash: "nf", name: "Show S01 1080p NF WEB-DL", seeders: 5 }),
+    r({ infoHash: "amzn", name: "Show S01 1080p AMZN WEB-DL", seeders: 7 }),
+    r({ infoHash: "nf2", name: "Other S01 1080p NF WEB-DL", seeders: 9 }),
+  ];
+
+  it("groups by platform name, healthiest first within a group", () => {
+    expect(ids(sortResults(list, { field: "platform", dir: "asc" }))).toEqual([
+      "nf2",
+      "nf",
+      "amzn",
+      "plain",
+    ]);
+  });
+
+  it("puts releases with no platform last in either direction", () => {
+    expect(ids(sortResults(list, { field: "platform", dir: "desc" }))).toEqual([
+      "amzn",
+      "nf2",
+      "nf",
+      "plain",
+    ]);
   });
 });

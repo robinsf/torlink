@@ -1,5 +1,6 @@
 import { getSource } from "../sources/registry";
 import type { TorrentResult } from "../sources/types";
+import { platformSearchText } from "./platform";
 
 export function filterResults(
   list: TorrentResult[],
@@ -18,7 +19,9 @@ export function filterResults(
   if (text) {
     const tokens = text.split(/\s+/);
     const scored = filtered.map((r) => {
-      const name = r.name.toLowerCase();
+      // The platform names ride along after the title, so "netflix" finds an
+      // NF release without the title having to say it.
+      const name = `${r.name} ${platformSearchText(r)}`.toLowerCase();
       let score = 0;
 
       // Every token must be present

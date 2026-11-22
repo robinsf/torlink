@@ -61,3 +61,16 @@ describe("filterResults", () => {
     expect(filterResults(list, false, "ubuntu 24").map(x => x.infoHash)).toEqual(["a", "b", "d"]);
   });
 });
+
+describe("filterResults by platform name", () => {
+  const list = [
+    r({ infoHash: "nf", name: "Show S01 1080p NF WEB-DL" }),
+    r({ infoHash: "amzn", name: "Show S01 1080p AMZN WEB-DL" }),
+    r({ infoHash: "plain", name: "Show S01 1080p BluRay" }),
+  ];
+  it("matches a platform by its name or alias even when the title lacks it", () => {
+    expect(filterResults(list, false, "netflix").map((x) => x.infoHash)).toEqual(["nf"]);
+    expect(filterResults(list, false, "amazon").map((x) => x.infoHash)).toEqual(["amzn"]);
+    expect(filterResults(list, false, "show prime").map((x) => x.infoHash)).toEqual(["amzn"]);
+  });
+});
