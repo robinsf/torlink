@@ -5,7 +5,7 @@ import type { Pixels } from "../../tmdb/poster";
 
 // A poster needs this much height and leaves the text this much width.
 const POSTER_MIN_ROWS = 8;
-const POSTER_MAX_ROWS = 24;
+const POSTER_MAX_ROWS = 32;
 export const POSTER_GAP = 2;
 const TEXT_MIN_W = 36;
 
@@ -29,8 +29,8 @@ export function Poster({ img, cols, rows }: { img: Pixels | null; cols: number; 
       {cells.map((row, y) => (
         <Text key={y}>
           {toRuns(row).map((run, i) => (
-            <Text key={i} color={run.top} backgroundColor={run.bottom}>
-              {"▀".repeat(run.length)}
+            <Text key={i} color={run.fg} backgroundColor={run.bg}>
+              {run.text}
             </Text>
           ))}
         </Text>

@@ -11,41 +11,70 @@ function image(width: number, height: number, color: (x: number, y: number) => [
   return { width, height, data };
 }
 
+const RED: [number, number, number] = [255, 0, 0];
+const BLUE: [number, number, number] = [0, 0, 255];
+
 describe("renderPoster", () => {
-  it("puts the upper half of the image in each cell's top pixel and the lower half in its bottom", () => {
-    const img = image(4, 8, (_x, y) => (y < 4 ? [255, 0, 0] : [0, 0, 255]));
-    const rows = renderPoster(img, 2, 2);
-    // 2 rows of cells = 4 pixel rows: red, red, blue, blue.
-    expect(rows).toHaveLength(2);
-    expect(rows[0]![0]).toEqual({ top: "#ff0000", bottom: "#ff0000" });
-    expect(rows[1]![1]).toEqual({ top: "#0000ff", bottom: "#0000ff" });
+  it("draws a flat area as an upper half block of one colour", () => {
+    const [row] = renderPoster(image(4, 4, () => [10, 20, 30]), 2, 2);
+    expect(row![0]).toEqual({ ch: "▀", fg: "#0a141e", bg: "#0a141e" });
   });
 
-  it("averages the pixels a cell covers", () => {
-    // Left column black, right column white, shrunk to one pixel wide.
-    const img = image(2, 2, (x) => (x === 0 ? [0, 0, 0] : [255, 255, 255]));
-    const [row] = renderPoster(img, 1, 1);
-    expect(row![0]!.top).toBe("#808080");
+  it("puts the upper half of the image above the lower half with a half block", () => {
+    const rows = renderPoster(image(2, 4, (_x, y) => (y < 2 ? RED : BLUE)), 1, 2);
+    // Two rows of one cell each; each cell is itself flat.
+    expect(rows[0]![0]).toMatchObject({ fg: "#ff0000", bg: "#ff0000" });
+    expect(rows[1]![0]).toMatchObject({ fg: "#0000ff", bg: "#0000ff" });
+    // One row straddling the edge: red on top, blue below.
+    const [edge] = renderPoster(image(2, 2, (_x, y) => (y === 0 ? RED : BLUE)), 1, 1);
+    expect(edge![0]).toEqual({ ch: "▀", fg: "#ff0000", bg: "#0000ff" });
+  });
+
+  it("uses a left or right half block for a vertical edge, which half blocks alone cannot", () => {
+    const [row] = renderPoster(image(2, 2, (x) => (x === 0 ? RED : BLUE)), 1, 1);
+    expect(row![0]).toEqual({ ch: "▌", fg: "#ff0000", bg: "#0000ff" });
+  });
+
+  it("uses a diagonal quadrant block for a diagonal edge", () => {
+    const [row] = renderPoster(image(2, 2, (x, y) => (x === y ? RED : BLUE)), 1, 1);
+    expect(row![0]).toEqual({ ch: "▚", fg: "#ff0000", bg: "#0000ff" });
+  });
+
+  it("isolates a single odd pixel in a quadrant glyph and keeps the rest as the other colour", () => {
+    const [row] = renderPoster(image(2, 2, (x, y) => (x === 1 && y === 1 ? RED : BLUE)), 1, 1);
+    expect(row![0]).toEqual({ ch: "▗", fg: "#ff0000", bg: "#0000ff" });
+  });
+
+  it("averages the source pixels each sample covers", () => {
+    // Left column black, right white, shrunk to a single flat-ish sample pair.
+    const [row] = renderPoster(image(2, 2, (x) => (x === 0 ? [0, 0, 0] : [255, 255, 255])), 1, 1);
+    expect(row![0]).toMatchObject({ ch: "▌", fg: "#000000", bg: "#ffffff" });
+    const [one] = renderPoster(image(2, 2, (x) => (x === 0 ? [0, 0, 0] : [255, 255, 255])), 1, 1);
+    expect(one).toHaveLength(1);
   });
 
   it("makes cols x rows cells even from a tiny source", () => {
     const rows = renderPoster(image(1, 1, () => [10, 20, 30]), 5, 3);
     expect(rows).toHaveLength(3);
-    for (const r of rows) {
-      expect(r).toHaveLength(5);
-      expect(r[0]).toEqual({ top: "#0a141e", bottom: "#0a141e" });
-    }
+    for (const r of rows) expect(r).toHaveLength(5);
   });
 });
 
 describe("toRuns", () => {
-  it("merges neighbours of the same colour", () => {
-    const a = { top: "#111111", bottom: "#222222" };
-    const b = { top: "#333333", bottom: "#222222" };
-    expect(toRuns([a, a, b, a, a, a])).toEqual([
-      { ...a, length: 2 },
-      { ...b, length: 1 },
-      { ...a, length: 3 },
+  it("merges neighbours of the same two colours into one run of their glyphs", () => {
+    const a = { fg: "#111111", bg: "#222222" };
+    const b = { fg: "#333333", bg: "#222222" };
+    expect(
+      toRuns([
+        { ch: "▀", ...a },
+        { ch: "▌", ...a },
+        { ch: "▀", ...b },
+        { ch: "▚", ...a },
+      ]),
+    ).toEqual([
+      { ...a, text: "▀▌" },
+      { ...b, text: "▀" },
+      { ...a, text: "▚" },
     ]);
   });
 });

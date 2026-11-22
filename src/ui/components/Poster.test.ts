@@ -2,8 +2,8 @@ import { describe, expect, it } from "vitest";
 import { POSTER_GAP, posterBox } from "./Poster";
 
 describe("posterBox", () => {
-  it("is as tall as the pane allows, up to 24 rows, in a roomy pane", () => {
-    expect(posterBox(40, 120)).toEqual({ rows: 24, cols: 32 });
+  it("is as tall as the pane allows, up to 32 rows, in a roomy pane", () => {
+    expect(posterBox(40, 120)).toEqual({ rows: 32, cols: 43 });
     expect(posterBox(14, 120)).toEqual({ rows: 14, cols: 19 });
   });
 
