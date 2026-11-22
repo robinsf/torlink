@@ -104,6 +104,37 @@ describe("topTitles", () => {
     expect(out[1]).toMatchObject({ year: undefined, rating: undefined });
   });
 
+  it("filters by the year a show first aired, or a film was released", async () => {
+    vi.stubEnv("TORLINK_TMDB_KEY", "k");
+    const { topTitles } = await import("./top");
+    mockFetch.mockResolvedValueOnce(reply({ results: [] }));
+    await topTitles("netflix", "tv", { year: 2024 });
+    expect(askedUrl(0).searchParams.get("first_air_date_year")).toBe("2024");
+    expect(askedUrl(0).searchParams.has("primary_release_year")).toBe(false);
+    mockFetch.mockResolvedValueOnce(reply({ results: [] }));
+    await topTitles("netflix", "movie", { year: 2023 });
+    expect(askedUrl(1).searchParams.get("primary_release_year")).toBe("2023");
+    expect(askedUrl(1).searchParams.has("first_air_date_year")).toBe(false);
+  });
+
+  it("keeps each year's list apart in the cache, and sends no year for popular now", async () => {
+    vi.stubEnv("TORLINK_TMDB_KEY", "k");
+    const { topTitles } = await import("./top");
+    mockFetch.mockResolvedValue(reply({ results: [] }));
+    await topTitles("hulu", "tv");
+    await topTitles("hulu", "tv", { year: 2025 });
+    await topTitles("hulu", "tv", { year: 2025 });
+    await topTitles("hulu", "tv", { year: 2024 });
+    expect(mockFetch).toHaveBeenCalledTimes(3);
+    expect(askedUrl(0).searchParams.has("first_air_date_year")).toBe(false);
+  });
+
+  it("lists the newest five calendar years, newest first", async () => {
+    const { recentYears } = await import("./top");
+    expect(recentYears(new Date("2026-11-22T12:00:00Z"))).toEqual([2026, 2025, 2024, 2023, 2022]);
+    expect(recentYears(new Date("2026-11-22T12:00:00Z"), 2)).toEqual([2026, 2025]);
+  });
+
   it("reads a film's title and release date", async () => {
     vi.stubEnv("TORLINK_TMDB_KEY", "k");
     const { topTitles } = await import("./top");

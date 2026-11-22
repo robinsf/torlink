@@ -12,7 +12,7 @@ import { posterCols, renderPoster, toRuns } from "../poster";
 import { postersEnabled } from "../../tmdb/poster";
 import { clipWords, truncate } from "../../util/format";
 import type { Pixels } from "../../tmdb/poster";
-import type { TitleKind, TopTitle } from "../../tmdb/top";
+import { recentYears, type TitleKind, type TopTitle } from "../../tmdb/top";
 
 const RATING_W = 6;
 
@@ -167,11 +167,14 @@ export function Top() {
   const focused = region === "content";
   const [platformIdx, setPlatformIdx] = useState(0);
   const [kind, setKind] = useState<TitleKind>("tv");
+  // undefined is "popular now"; otherwise one of the last five years.
+  const [year, setYear] = useState<number | undefined>(undefined);
+  const years = useMemo(() => recentYears(), []);
   const [cursor, setCursor] = useState(0);
   const [detail, setDetail] = useState<TopTitle | null>(null);
 
   const platform = PLATFORM_TABS[platformIdx]!;
-  const top = useTopTitles(platform.id, kind);
+  const top = useTopTitles(platform.id, kind, year);
   const titles = top.value ?? [];
   const clamped = Math.min(cursor, Math.max(0, titles.length - 1));
 
@@ -211,6 +214,10 @@ export function Top() {
       } else if (input === "v") {
         setKind((k) => (k === "tv" ? "movie" : "tv"));
         setCursor(0);
+      } else if (input === "y") {
+        // Popular now, then each of the last five years, then back.
+        setYear((y) => years[(y === undefined ? -1 : years.indexOf(y)) + 1]);
+        setCursor(0);
       } else if (key.upArrow || input === "k") {
         if (titles.length > 0) setCursor(wrapStep(clamped, -1, titles.length));
       } else if (key.downArrow || input === "j") {
@@ -247,7 +254,7 @@ export function Top() {
   );
 
   return (
-    <Panel title={`top picks ${ICON.dot} ${platform.label}`} width={contentWidth} focused={focused} height={panelH}>
+    <Panel title={`top picks ${ICON.dot} ${platform.label}${year === undefined ? "" : ` ${ICON.dot} ${year}`}`} width={contentWidth} focused={focused} height={panelH}>
       {detail ? (
         <Detail title={detail} platformLabel={platform.label} width={Math.max(10, contentWidth - 4)} rows={innerRows} />
       ) : (
@@ -256,7 +263,7 @@ export function Top() {
             {tab("Shows", kind === "tv")}
             <Text dimColor>{"  /  "}</Text>
             {tab("Movies", kind === "movie")}
-            <Text dimColor>{`   ${ICON.dot}   [ ] platform   v shows/movies`}</Text>
+            <Text dimColor>{`   ${ICON.dot}   ${year === undefined ? "popular now" : `from ${year}`}   ${ICON.dot}   [ ] platform  v shows/movies  y year`}</Text>
           </Box>
           <Box flexDirection="column" marginTop={1}>
             {top.loading ? (
@@ -264,7 +271,7 @@ export function Top() {
             ) : top.error ? (
               <Setup error={top.error} />
             ) : titles.length === 0 ? (
-              <Text dimColor>{`Nothing popular on ${platform.label} in your region.`}</Text>
+              <Text dimColor>{`Nothing ${year === undefined ? "popular" : `from ${year}`} on ${platform.label} in your region.`}</Text>
             ) : (
               visible.map((t, i) => {
                 const here = start + i === clamped && focused;

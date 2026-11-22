@@ -65,6 +65,12 @@ interface DiscoverRow {
 
 const MAX_TITLES = 20;
 
+// The newest `count` calendar years, newest first: the years the Top picks
+// year view steps through.
+export function recentYears(now: Date = new Date(), count = 5): number[] {
+  return Array.from({ length: count }, (_, i) => now.getFullYear() - i);
+}
+
 // Remote text goes through the same flattening and control-character strip as
 // every other remote string: it lands in the terminal.
 const clean = (s: string | undefined): string => htmlToText(s ?? "");
@@ -99,17 +105,20 @@ async function cached<T>(key: string, load: () => Promise<T>): Promise<T> {
   return value;
 }
 
-// What is most popular on a platform right now, for shows or for films, among
-// titles streaming included with a subscription in the user's region.
+// What is most popular on a platform, for shows or for films, among titles
+// streaming included with a subscription in the user's region. With a `year`,
+// only titles first aired or released that year; without, whatever is popular
+// right now.
 export async function topTitles(
   platformId: string,
   kind: TitleKind,
-  opts: TmdbOptions = {},
+  opts: TmdbOptions & { year?: number } = {},
 ): Promise<TopTitle[]> {
   const provider = PROVIDER_IDS[platformId];
   if (provider === undefined) return [];
   const region = tmdbRegion();
-  return cached(`top|${platformId}|${kind}|${region}`, async () => {
+  const { year, ...request } = opts;
+  return cached(`top|${platformId}|${kind}|${region}|${year ?? "now"}`, async () => {
     const json = await tmdbGet<{ results?: DiscoverRow[] }>(
       `/discover/${kind}`,
       {
@@ -118,8 +127,11 @@ export async function topTitles(
         with_watch_monetization_types: "flatrate",
         sort_by: "popularity.desc",
         language: "en-US",
+        ...(year === undefined
+          ? {}
+          : { [kind === "tv" ? "first_air_date_year" : "primary_release_year"]: String(year) }),
       },
-      opts,
+      request,
     );
     return mapTopTitles(json.results ?? [], kind);
   });

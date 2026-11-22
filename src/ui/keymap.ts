@@ -100,6 +100,7 @@ export function footerHints(
       { keys: "s", label: "Find torrents" },
       { keys: "[ ]", label: "Platform" },
       { keys: "v", label: "Shows/Movies" },
+      { keys: "y", label: "Year" },
       SWITCH,
       ALWAYS,
     ];

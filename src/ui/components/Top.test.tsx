@@ -77,7 +77,7 @@ describe("Top picks", () => {
     expect(u.frame()).toContain("Slow Horses (2022)");
     expect(u.frame()).toContain("★ 8.4");
     expect(u.frame()).toContain("Top picks · Netflix");
-    expect(hooks.topCalls.at(-1)).toEqual(["netflix", "tv"]);
+    expect(hooks.topCalls.at(-1)).toEqual(["netflix", "tv", undefined]);
   });
 
   it("steps through platforms with ] and [, and between shows and movies with v", async () => {
@@ -92,7 +92,7 @@ describe("Top picks", () => {
     u.press("[");
     await vi.waitFor(() => expect(u.frame()).toContain("Top picks · Paramount+"));
     u.press("v");
-    await vi.waitFor(() => expect(hooks.topCalls.at(-1)).toEqual(["paramount", "movie"]));
+    await vi.waitFor(() => expect(hooks.topCalls.at(-1)).toEqual(["paramount", "movie", undefined]));
   });
 
   it("explains how to get a TMDB key when none is set", async () => {
@@ -160,5 +160,26 @@ describe("Top picks", () => {
     u.press("\r");
     await vi.waitFor(() => expect(u.frame()).toContain("Mark works at Lumon"));
     expect(u.frame()).not.toContain("▀");
+  });
+
+  it("steps through the last five years with y, then back to popular now", async () => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date("2026-11-22T12:00:00Z"));
+    try {
+      hooks.top = loaded(SHOWS);
+      const u = mount();
+      await vi.waitFor(() => expect(u.frame()).toContain("popular now"));
+      for (const year of [2026, 2025, 2024, 2023, 2022]) {
+        u.press("y");
+        await vi.waitFor(() => expect(hooks.topCalls.at(-1)).toEqual(["netflix", "tv", year]));
+        expect(u.frame()).toContain(`Top picks · Netflix · ${year}`);
+        expect(u.frame()).toContain(`from ${year}`);
+      }
+      u.press("y");
+      await vi.waitFor(() => expect(hooks.topCalls.at(-1)).toEqual(["netflix", "tv", undefined]));
+      expect(u.frame()).toContain("popular now");
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

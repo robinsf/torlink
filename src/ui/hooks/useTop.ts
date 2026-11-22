@@ -54,8 +54,8 @@ function useLoad<T>(enabled: boolean, load: (signal: AbortSignal) => Promise<T>,
   return state;
 }
 
-export function useTopTitles(platformId: string, kind: TitleKind): Loaded<TopTitle[]> {
-  return useLoad(true, (signal) => topTitles(platformId, kind, { signal }), [platformId, kind]);
+export function useTopTitles(platformId: string, kind: TitleKind, year?: number): Loaded<TopTitle[]> {
+  return useLoad(true, (signal) => topTitles(platformId, kind, { signal, year }), [platformId, kind, year]);
 }
 
 export function useTitleDetails(title: TopTitle | null): Loaded<TitleDetails> {
