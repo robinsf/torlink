@@ -278,16 +278,30 @@ export function App({
     [config, setConfig, closeFolderPrompt],
   );
 
-  const startDownload = useCallback(
+  // Queue a download and stay where you are. This is what a list's d key calls:
+  // someone picking several rows should not be thrown into the Downloads tab
+  // after each one, so the notice and the Downloads badge say it landed.
+  const queueDownload = useCallback(
     (input: DownloadInput) => {
       if (!config || !queue) return;
+      const queued = queue.getItems().find((it) => it.id === input.id);
       void fs.mkdir(config.downloadDir, { recursive: true }).catch(() => {});
       queue.add(input, config.downloadDir);
-      setNotice(`Added: ${truncate(cleanText(input.name), 40)}`);
+      const name = truncate(cleanText(input.name), 40);
+      setNotice(queued && queued.status !== "failed" ? `Already in queue: ${name}` : `Added: ${name}`);
+    },
+    [config, queue],
+  );
+
+  // A magnet pasted, typed or dragged in has no list to stay in, so it opens
+  // Downloads to show what it started.
+  const startDownload = useCallback(
+    (input: DownloadInput) => {
+      queueDownload(input);
       setSection("downloads");
       setRegion("content");
     },
-    [config, queue],
+    [queueDownload],
   );
 
   const requestDownloadTo = useCallback(
@@ -344,8 +358,6 @@ export function App({
             ? `Added: ${truncate(cleanText(fresh[0]!.name), 28)} → ${truncate(dir, 36)}`
             : `Added ${fresh.length} torrents → ${truncate(dir, 36)}`,
         );
-        setSection("downloads");
-        setRegion("content");
       })();
     },
     [queue, pendingDownload],
@@ -515,7 +527,7 @@ export function App({
       setSeedFocus,
       resultFocus,
       setResultFocus,
-      startDownload,
+      startDownload: queueDownload,
       requestDownloadTo,
       copyMagnet,
       openDownloadFolder,
@@ -546,7 +558,7 @@ export function App({
     downloadFocus,
     seedFocus,
     resultFocus,
-    startDownload,
+    queueDownload,
     requestDownloadTo,
     copyMagnet,
     openDownloadFolder,
