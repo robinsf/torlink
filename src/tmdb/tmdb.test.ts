@@ -104,20 +104,58 @@ describe("topTitles", () => {
     expect(out[1]).toMatchObject({ year: undefined, rating: undefined });
   });
 
-  it("filters a show by episodes airing in the year, and a film by its release year", async () => {
+  it("asks for a show both ways, debuted that year and airing that year, and a film by release year", async () => {
     vi.stubEnv("TORLINK_TMDB_KEY", "k");
     const { topTitles } = await import("./top");
-    mockFetch.mockResolvedValueOnce(reply({ results: [] }));
+    mockFetch.mockResolvedValue(reply({ results: [] }));
     await topTitles("netflix", "tv", { year: 2024 });
-    // A returning show counts for every year it airs in, not just its debut.
-    expect(askedUrl(0).searchParams.get("air_date.gte")).toBe("2024-01-01");
-    expect(askedUrl(0).searchParams.get("air_date.lte")).toBe("2024-12-31");
-    expect(askedUrl(0).searchParams.has("first_air_date_year")).toBe(false);
-    expect(askedUrl(0).searchParams.has("primary_release_year")).toBe(false);
-    mockFetch.mockResolvedValueOnce(reply({ results: [] }));
+    const tv = [0, 1].map((n) => askedUrl(n).searchParams);
+    expect(tv.some((p) => p.get("first_air_date_year") === "2024")).toBe(true);
+    const air = tv.find((p) => p.has("air_date.gte"))!;
+    expect(air.get("air_date.gte")).toBe("2024-01-01");
+    expect(air.get("air_date.lte")).toBe("2024-12-31");
+    expect(mockFetch).toHaveBeenCalledTimes(2);
+
+    mockFetch.mockClear();
     await topTitles("netflix", "movie", { year: 2023 });
-    expect(askedUrl(1).searchParams.get("primary_release_year")).toBe("2023");
-    expect(askedUrl(1).searchParams.has("air_date.gte")).toBe(false);
+    expect(mockFetch).toHaveBeenCalledTimes(1);
+    expect(askedUrl(0).searchParams.get("primary_release_year")).toBe("2023");
+    expect(askedUrl(0).searchParams.has("air_date.gte")).toBe(false);
+  });
+
+  it("merges the two show lists: each title once, most popular first", async () => {
+    vi.stubEnv("TORLINK_TMDB_KEY", "k");
+    const { topTitles } = await import("./top");
+    // A new show only the debut query knows, a returning show only the
+    // air-date query knows, and one both return.
+    const debut = { results: [
+      { id: 1, name: "Neagley", popularity: 90 },
+      { id: 3, name: "Both", popularity: 50 },
+    ] };
+    const airing = { results: [
+      { id: 2, name: "Reacher", popularity: 200 },
+      { id: 3, name: "Both", popularity: 50 },
+    ] };
+    mockFetch.mockImplementation(async (url) =>
+      reply(String(url).includes("first_air_date_year") ? debut : airing),
+    );
+    const out = await topTitles("prime", "tv", { year: 2026 });
+    expect(out.map((t) => t.title)).toEqual(["Reacher", "Neagley", "Both"]);
+  });
+
+  it("keeps the other list when one of the two requests fails, and fails when both do", async () => {
+    vi.stubEnv("TORLINK_TMDB_KEY", "k");
+    const { topTitles } = await import("./top");
+    mockFetch.mockImplementation(async (url) =>
+      String(url).includes("first_air_date_year")
+        ? reply({}, 503)
+        : reply({ results: [{ id: 2, name: "Reacher", popularity: 1 }] }),
+    );
+    expect((await topTitles("prime", "tv", { year: 2025 })).map((t) => t.title)).toEqual(["Reacher"]);
+
+    mockFetch.mockReset();
+    mockFetch.mockResolvedValue(reply({}, 503));
+    await expect(topTitles("prime", "tv", { year: 2024 })).rejects.toMatchObject({ status: 503 });
   });
 
   it("keeps each year's list apart in the cache, and sends no year for popular now", async () => {
@@ -128,8 +166,10 @@ describe("topTitles", () => {
     await topTitles("hulu", "tv", { year: 2025 });
     await topTitles("hulu", "tv", { year: 2025 });
     await topTitles("hulu", "tv", { year: 2024 });
-    expect(mockFetch).toHaveBeenCalledTimes(3);
+    // popular now: 1 request; each show year: 2 requests, the repeat cached.
+    expect(mockFetch).toHaveBeenCalledTimes(5);
     expect(askedUrl(0).searchParams.has("air_date.gte")).toBe(false);
+    expect(askedUrl(0).searchParams.has("first_air_date_year")).toBe(false);
   });
 
   it("lists the newest five calendar years, newest first", async () => {

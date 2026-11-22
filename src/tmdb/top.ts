@@ -24,6 +24,8 @@ export interface TopTitle {
   // TMDB's 0-10 user score; undefined when nobody has voted.
   rating?: number;
   overview: string;
+  // TMDB's popularity score, used to merge ranked lists.
+  popularity?: number;
   // TMDB poster path, e.g. "/abc.jpg"; resolved by fetchPoster.
   poster?: string;
 }
@@ -60,6 +62,7 @@ interface DiscoverRow {
   vote_average?: number;
   vote_count?: number;
   overview?: string;
+  popularity?: number;
   poster_path?: string | null;
 }
 
@@ -88,6 +91,7 @@ export function mapTopTitles(rows: DiscoverRow[], kind: TitleKind): TopTitle[] {
       year: date && /^\d{4}/.test(date) ? date.slice(0, 4) : undefined,
       rating: r.vote_count && r.vote_average ? Math.round(r.vote_average * 10) / 10 : undefined,
       overview: clean(r.overview),
+      popularity: typeof r.popularity === "number" ? r.popularity : undefined,
       poster: r.poster_path || undefined,
     });
   }
@@ -105,17 +109,25 @@ async function cached<T>(key: string, load: () => Promise<T>): Promise<T> {
   return value;
 }
 
-function yearParams(kind: TitleKind, year: number | undefined): Record<string, string> {
-  if (year === undefined) return {};
-  if (kind === "movie") return { primary_release_year: String(year) };
-  return { "air_date.gte": `${year}-01-01`, "air_date.lte": `${year}-12-31` };
+// The discover filters that mean "this year". A film is one released that
+// year. A show counts two ways, asked separately and merged: it debuted that
+// year, or it has episodes airing that year. Neither alone is enough: the debut
+// year misses a returning show in every later year, and the air-date range
+// misses a new show TMDB has no episode dates for yet.
+function yearFilters(kind: TitleKind, year: number | undefined): Record<string, string>[] {
+  if (year === undefined) return [{}];
+  if (kind === "movie") return [{ primary_release_year: String(year) }];
+  return [
+    { first_air_date_year: String(year) },
+    { "air_date.gte": `${year}-01-01`, "air_date.lte": `${year}-12-31` },
+  ];
 }
 
 // What is most popular on a platform, for shows or for films, among titles
 // streaming included with a subscription in the user's region. With a `year`,
-// a film is one released that year and a show is one with episodes airing that
-// year, so a returning show counts for every year it is on air, not only the
-// one it debuted in; without a year, whatever is popular right now.
+// a film is one released that year and a show is one that debuted or has
+// episodes airing that year, so a returning show counts for every year it is on
+// air; without a year, whatever is popular right now.
 export async function topTitles(
   platformId: string,
   kind: TitleKind,
@@ -126,20 +138,35 @@ export async function topTitles(
   const region = tmdbRegion();
   const { year, ...request } = opts;
   return cached(`top|${platformId}|${kind}|${region}|${year ?? "now"}`, async () => {
-    const json = await tmdbGet<{ results?: DiscoverRow[] }>(
-      `/discover/${kind}`,
-      {
-        with_watch_providers: String(provider),
-        watch_region: region,
-        with_watch_monetization_types: "flatrate",
-        sort_by: "popularity.desc",
-        language: "en-US",
-        ...yearParams(kind, year),
-      },
-      request,
+    const asks = yearFilters(kind, year).map((filter) =>
+      tmdbGet<{ results?: DiscoverRow[] }>(
+        `/discover/${kind}`,
+        {
+          with_watch_providers: String(provider),
+          watch_region: region,
+          with_watch_monetization_types: "flatrate",
+          sort_by: "popularity.desc",
+          language: "en-US",
+          ...filter,
+        },
+        request,
+      ),
     );
-    return mapTopTitles(json.results ?? [], kind);
+    // One ask failing leaves the other's list; both failing is an error.
+    const settled = await Promise.allSettled(asks);
+    const ok = settled.filter((r): r is PromiseFulfilledResult<{ results?: DiscoverRow[] }> => r.status === "fulfilled");
+    if (ok.length === 0) throw (settled[0] as PromiseRejectedResult).reason;
+    return mergeTop(ok.map((r) => mapTopTitles(r.value.results ?? [], kind)));
   });
+}
+
+// Lists merged into one: each title once, the most popular first.
+export function mergeTop(lists: TopTitle[][]): TopTitle[] {
+  const byId = new Map<number, TopTitle>();
+  for (const t of lists.flat()) if (!byId.has(t.id)) byId.set(t.id, t);
+  const merged = [...byId.values()];
+  if (lists.length > 1) merged.sort((a, b) => (b.popularity ?? 0) - (a.popularity ?? 0));
+  return merged.slice(0, MAX_TITLES);
 }
 
 interface DetailsJson {
